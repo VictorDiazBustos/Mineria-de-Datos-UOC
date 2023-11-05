@@ -1,0 +1,2512 @@
+---
+title: "victordiazb-PRA2"
+author: "victordiazb"
+date: "Enero 2023"
+output:
+  html_document:    
+    highlight: default
+    number_sections: no
+    theme: cosmo
+    toc: yes
+    toc_depth: 2
+  pdf_document:
+    highlight: zenburn
+    toc: yes
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_chunk$set(eval = FALSE)
+```
+
+# Introducción
+
+En esta práctica abordaremos un caso real de minería de datos donde tenemos que poner en juego conceptos como el ciclo de vida de un proyecto de minería de datos, desde el objetivo del proyecto hasta la implementación del conocimiento encontrado, pasando por la preparación, limpieza de los datos, conocimiento de los datos, generación del modelo, interpretación y evaluación.
+Esta práctica se dividirá en dos partes: esta primera en la que abordaremos las primeras fases del proceso, desde los objetivos hasta la preparación de los datos, y una segunda parte en la que seguiremos con el resto del proceso.
+
+# Práctica 1
+
+## Objetivos
+
+El objetivo de esta primera parte de la práctica consiste en seleccionar uno o varios juegos de datos, y realizar las tareas de preparación y análisis exploratorio con el objetivo de disponer de datos listos para después.
+
+Por su parte, en la segunda fase de la práctica, se aplicarán algoritmos no supervisados (clustering) y supervisados (regresión o clasificación), demostrando la correcta asimilación de todos los aspectos trabajados durante el semestre.
+
+## Descripción del origen del conjunto de datos
+
+El juego de datos seleccionado para esta práctica contiene información acerca de distintos puestos de trabajo.
+En concreto, contiene datos sobre títulos de trabajo, requisitos de experiencia laboral, habilidades clave, categorías de roles, ubicaciones, áreas funcionales, industrias, roles, longitudes, latitudes y salarios.
+Dicho conjunto de datos ha sido obtenido de la plataforma *Kaggl*e, una comunidad en línea de científicos de datos y profesionales del aprendizaje automático (<https://www.kaggle.com/datasets/thedevastator/predicting-job-titles-from-resumes>).
+
+### Problema
+
+Dado este juego de datos, el problema a resolver consistirá en predecir el salario de un puesto de trabajo.
+Para ello, en primer lugar, se debe preparar correctamente el juego de datos, realizando la debida limpieza de datos, así como discretización y normalización en caso de ser necesaria y análisis estadístico de atributos.
+
+Una vez preparado el juego de datos, en la segunda fase de la práctica se aplicarán modelos de aprendizaje automático supervisados y no supervisados para predecir el salario de un puesto de trabajo, tema en el que se profundizará en la siguiente entrega.
+
+## Análisis exploratorio
+
+Queremos hacer una primera aproximación al conjunto de datos escogido y responder a las preguntas más básicas: ¿Cuánto registros tiene?
+¿Cuántas variables?
+¿De qué tipología son?
+¿Cómo se distribuyen los valores de las variables?
+¿Hay problemas con los datos, por ejemplo, campos vacíos?
+¿Puedo intuir ya el valor analítico de los datos?
+¿Qué primeras conclusiones puedo extraer?
+
+El primer paso para realizar un análisis exploratorio es cargar el fichero de datos.
+
+```{r message= FALSE, warning=FALSE}
+# Cargar datos
+path = 'jobss.CSV'
+data <- read.csv(path, row.names=NULL)
+```
+
+Verificamos la estructura del juego de datos.
+Vemos el número de columnas que tenemos y ejemplos de los contenidos de las filas.
+
+```{r message= FALSE, warning=FALSE}
+# Mostrar estructura de datos
+print(str(data))
+```
+
+Como se puede apreciar, el juego de datos contiene 500 registros con 12 variables, aunque se observa que una de ellas (variable *X*) contiene únicamente valores nulos, hecho que trataremos más adelante en el preprocesado de datos.
+Mientras tanto, procedemos a definir los otros 11 atributos.
+
+-   **Job Title**: Título del trabajo (String)
+
+-   **Job Experience Required**: Años de experiencia requerida en un trabajo similar
+
+-   **Key Skills**: Habilidades clave requeridas para el trabajo (String)
+
+-   **Role Category**: Categoría del trabajo (String)
+
+-   **Location**: Ubicación del trabajo (String)
+
+-   **Functional Area**: Área funcional del puesto (String)
+
+-   **Industry**: Industria del trabajo (String)
+
+-   **Role**: Función que se desempeña (String)
+
+-   **Longitude**: Longitud (distancia en grados del trabajo respecto al meridiano de Greenwich) del trabajo (Float)
+
+-   **Latitude**: Latitud (distancia en grados respecto al ecuador) del trabajo (Float)
+
+-   **Sal**: Salario bruto al mes (Int)
+
+## Preprocesado y gestión de características
+
+En el paso anterior se ha observado una variable repleta de valores nulos.
+A continuación, vamos a ver la cantidad de valores nulos o vacíos en cada atributo:
+
+```{r message= FALSE, warning=FALSE}
+colSums(is.na(data))
+```
+
+```{r message= FALSE, warning=FALSE}
+colSums(data=="")
+```
+
+Vemos que, efectivamente, la variable *X* únicamente contiene valores nulos, por lo tanto es una variable que podemos eliminar.
+
+```{r message= FALSE, warning=FALSE}
+data <- data[,!colnames(data) %in% c("X")]
+```
+
+A continuación, se comprueba si existen errores en variables categóricas, como, por ejemplo, datos mal escritos.
+Para ello, utilizaremos la función *is.character* para saber su una columna está compuesta por datos categóricos o no; *factor()*, que codifica un vector como un factor (estructura de datos utilizada para representar un vector como datos categóricos), para obtener el factor de una columna; y *levels()* para obtener los valores únicos del factor de cada columna.
+
+```{r message= FALSE, warning=FALSE}
+if(!require('dplyr')) install.packages('dplyr'); library('dplyr')
+for (i in colnames(select_if(data,is.character))){
+  print(paste("----- ", i, ", num categorias:", length(levels(factor(data[[i]]))), " -----"))
+  print(levels(factor(data[[i]])))
+}
+```
+
+```{r}
+print(colnames(select_if(data,is.character)))
+print(colnames(select_if(data,is.numeric)))
+```
+
+Se observa que en el juego de datos hay **8 variables categóricas** (*Job.Title*, *Job.Experience.Required*, *Key.Skills*, *Role.Category*, *Location*, *Functional.Area*, *Industry*, *Role*) y **3 numéricas** (*Longitude*, *Latitude*, *sal*).
+
+En la variable *Job Experience Required* se encuentran registros tanto del formato '\<minExp\> - \<maxExp\> yrs' como ' \<minExp\> - \<maxExp\> Years'.
+Para unificar estos datos, lo convertiremos todo al formato '\<minExp\>-\<maxExp\>'.
+Además, se encuentras registros 'Not Mentioned' y 'vide', los cuales supondremos que cualquier persona, con o sin experiencia, puede optar al puesto, y, por tanto, los reemplazaremos por '0-50', ya que difícilmente una persona superará los 50 años de experiencia.
+Para ello, utilizaremos las funciones *str_remove_all()*, que elimina una subcadena de una cadena, para eliminar espacios; *tolower()*, que convierte cadenas de texto a minúscula, para no distinguir entre 'y' e 'Y'; *strsplit()*, que divide una cadena por un delimitador definido, para separar la parte numérica (\<minExp\>-\<maxExp\>); *lapply()* para convertir lo recibido por strplit() en un lista; y, por último, *str_replace_all()*, que reemplaza una subcadena dentro de una cadena por otra subcadena, para reemplazar 'Not Mentioned' y 'vide' por '0-50'.
+
+```{r message= FALSE, warning=FALSE}
+if(!require('stringr')) install.packages('stringr'); library('stringr')
+experiencia = data$Job.Experience.Required
+
+# Elimino espacios en blanco
+experiencia = str_remove_all(experiencia, " ")
+
+# Convierto todo a minúsculas para no diferenciar entre 'Y' e 'y'
+experiencia = tolower(experiencia)
+
+# Separo por 'y' y me quedo con el primer elemento.
+# Por ejemplo: '3-5yrs' -> [3-5,rs] -> '3-5'
+experiencia = lapply(strsplit(experiencia,split='y'),'[',1)
+
+# Reemplazo 'vide' y 'notmentioned' por '0-50'
+experiencia = str_replace_all(experiencia,'vide','0-50')
+experiencia = str_replace_all(experiencia,'notmentioned','0-50')
+
+# Actualizo el juego de datos
+data$Job.Experience.Required <- experiencia
+
+# Muestro categorías
+print(paste("num categorias:", length(levels(factor(data$Job.Experience.Required)))))
+print(levels(factor(data$Job.Experience.Required)))
+```
+
+De esta forma, se consigue unificar las 76 categorías anteriores en 61.
+
+Vamos a desglosar este atributo en dos: '*minExp*' y '*maxExp*' para poder analizar por separado la experiencia mínima y máxima requerida para un trabajo, utilizando la función *as.integer()* para convertir los caracteres en enteros, teniendo así dos variables numéricas más.
+
+```{r message= FALSE, warning=FALSE}
+data$minExp <- as.integer(lapply(strsplit(data$Job.Experience.Required,split='-'),'[',1))
+data$maxExp <- as.integer(lapply(strsplit(data$Job.Experience.Required,split='-'),'[',2))
+```
+
+A continuación, vamos a crear histogramas y describir los valores para ver los datos en general de las variables numéricas para hacer una primera aproximación a los datos.
+Además, defino una función *mode()* que devuelve la moda (valor más repetido) en una lista.
+Para ello, utilizo la función *table()para crear una tabla de frecuencias*
+
+```{r message= FALSE, warning=FALSE}
+if(!require('ggplot2')) install.packages('ggplot2'); library('ggplot2')
+if(!require('Rmisc')) install.packages('Rmisc'); library('Rmisc')
+if(!require('xfun')) install.packages('xfun'); library('xfun')
+
+summary(data$Longitude)
+
+ggp <- ggplot(data, aes_string(x = "Longitude")) +
+  geom_histogram(bins = 30, fill = "cornflowerblue", color = "black",ggtittle ="Contador ocurrencias")
+plot(ggp)
+```
+
+-   *Longitude*: sus valores están comprendidos entre -79.03 y 121.1, aunque existe una alta concentración de registros en torno al valor 75, con un valor promedio de 75.99.
+
+```{r message= FALSE, warning=FALSE}
+summary(data$Latitude)
+
+ggp <- ggplot(data, aes_string(x = "Latitude")) +
+  geom_histogram(bins = 30, fill = "cornflowerblue", color = "black",ggtittle ="Contador ocurrencias")
+plot(ggp)
+```
+
+-   *Latitude*: sus valores están comprendidos entre -8.124 y 46.314, aunque existe una gran concentración de registros en el intervalo [10,30], con un valor promedio de 21.09.
+
+```{r message= FALSE, warning=FALSE}
+summary(data$sal)
+
+ggp <- ggplot(data, aes_string(x = "sal")) +
+  geom_histogram(bins = 30, fill = "cornflowerblue", color = "black",ggtittle ="Contador ocurrencias")
+plot(ggp)
+```
+
+-   *sal*: sus valores están comprendidos entre 1510 y 6991. Tiene una distrubición bastante uniforme, con un valor promedio de 4225.
+
+```{r message= FALSE, warning=FALSE}
+summary(data$minExp)
+
+ggp <- ggplot(data, aes_string(x = "minExp")) +
+  geom_histogram(bins = 30, fill = "cornflowerblue", color = "black",ggtittle ="Contador ocurrencias")
+plot(ggp)
+```
+
+-   *minExp*: sus valores están comprendidos entre 0 y 20. Tiene una distribución descendente, con un valor promedio de 3.358.
+
+```{r message= FALSE, warning=FALSE}
+summary(data$maxExp)
+
+ggp <- ggplot(data, aes_string(x = "maxExp")) +
+  geom_histogram(bins = 30, fill = "cornflowerblue", color = "black",ggtittle ="Contador ocurrencias")
+plot(ggp)
+```
+
+-   *maxExp*: sus valores están comprendidos entre 0 y 50 (caso de experiencia no especificada). Excluyendo este caso, tiene una una distribución normal, en la que se observa una clara campana de gauss. Tiene un valor promedio de 3.358.
+
+A continuación, pintamos y mostramos las coordenadas en un mapa para visualizarlas.
+Para ello, utilizamos la función *map_data()* para obtener la imagen del mapa del mundo y *geom_polygon()* para pintar dicho mapa.
+Posteriormente, utilizamos *geom_point()* para pintar las coordenadas sobre el mapa.
+
+```{r message= FALSE, warning=FALSE}
+if(!require('mapdata')) install.packages('mapdata'); library(mapdata)
+if(!require('maps')) install.packages('maps'); library(maps)
+if(!require('ggrepel')) install.packages('ggrepel'); library(ggrepel)
+if(!require('tidyverse')) install.packages('tidyverse'); library(tidyverse)
+
+# Guardamos la información en un nuevo dataframe llamado mapa_mundo
+mapa_mundo <- map_data("world")
+
+# Visualizar el mapa y las coordenadas
+mapa_mundo %>%
+  ggplot() +
+  geom_polygon(aes( x= long, y = lat, group = group),
+               fill = "white",
+               color = "black") +
+  geom_point(data=data, aes(Longitude, Latitude),
+             color= "red", size=1)
+
+```
+
+Vemos que la mayoría de trabajos pertenecen a la India.
+
+A continuación, vamos a comprobar la existencia de valores atípicos mediante diagramas de cajas.
+Un diagrama de cajas muestran a simple vista la mediana y los cuartiles de los datos, y también pueden representarse sus valores atípicos.
+Para ello, primero debo convertir las variables categóricas en numéricas.
+
+```{r message= FALSE, warning=FALSE}
+data$numeric.Job.Title = as.numeric(factor(data$Job.Title))
+data$numeric.Key.Skills = as.numeric(factor(data$Key.Skills))
+data$numeric.Role.Category = as.numeric(factor(data$Role.Category))
+data$numeric.Location = as.numeric(factor(data$Location))
+data$numeric.Functional.Area = as.numeric(factor(data$Functional.Area))
+data$numeric.Industry = as.numeric(factor(data$Industry))
+data$numeric.Role = as.numeric(factor(data$Role))
+
+# Guardamos en una
+dataAux= data %>% select(colnames(select_if(data,is.numeric)))
+```
+
+Utilizamoss la función *boxplot()* para mostrar gráficamente el diagrama de barras.
+
+```{r message= FALSE, warning=FALSE}
+for(i in colnames(dataAux)){
+  boxplot(dataAux[i],main=i, col="gray")
+}
+```
+
+Se observa en los atributos *Longitude, Latitude, minExp,* *maxExp* y *numeric.Industry* la aparición de valores atípicos.
+Para evitar el exceso de protagonismo de estos datos extremos, los reemplazamos por la ***media windsor*** (fuente: [https://proyectodescartes.org/iCartesiLibri/materiales_didacticos/IntroduccionEstadisticaProbabilidad/3ESO/5_1MediaAritmetica/index.html#:\~:text=Media%20o%20promedio%20Windsor,inferior%20por%20sus%20inmediatos%20anteriores](https://proyectodescartes.org/iCartesiLibri/materiales_didacticos/IntroduccionEstadisticaProbabilidad/3ESO/5_1MediaAritmetica/index.html#:~:text=Media%20o%20promedio%20Windsor,inferior%20por%20sus%20inmediatos%20anteriores.)).
+
+La media windsor es una variante de la media aritmética que se suele utilizar para evitar el excesivo protagonismo de los datos extremos.
+Consiste en sustituir los datos extremos superior e inferior por sus inmediatos anteriores.
+Posteriormente se calcula la media aritmética de todos los datos así actualizados.
+Para ello, utilizamos la función *winsor.mean()* de la librería *psych*.
+
+En el caso de *numeric.Industry*, los valores extremos están muy cercanos a los cuartiles, por lo que no modificaremos nada en esta variable.
+En *Longitude* y Latitudereemplazaremos los valores fuera de los rango [50,85] y [0,40], respectivamente.
+En el caso de *minExp* y *maxExp*, no será posible corregir todos los valores atípicos, ya que a medida que unos se van corrigiendo, la media aritmética se va actualizando y van surgiendo nuevos valores atípicos.
+Por lo tanto, corregiremos únicamente los valores superiores a 15 y a 25, respectivamente.
+
+```{r message= FALSE, warning=FALSE}
+if(!require("psych")) install.packages("psych"); library(psych)
+
+# Reemplazo extremos de 'Longitude'
+dataAux$Longitude[which(dataAux$Longitude < 50 | dataAux$Longitude > 85)] <- winsor.mean(dataAux$Longitude)
+
+# Reemplazo extremos de 'Latitude'
+dataAux$Latitude[which(dataAux$Latitude < 0 | dataAux$Latitude > 40)] <- winsor.mean(dataAux$Latitude)
+
+# Reemplazo extremos de 'minExp'
+dataAux$minExp[which(dataAux$minExp > 15)] <- winsor.mean(dataAux$minExp)
+
+# Reemplazo extremos de 'maxExp'
+dataAux$maxExp[which(dataAux$maxExp > 25)] <- winsor.mean(dataAux$maxExp)
+
+for(i in colnames(dataAux)){
+  boxplot(dataAux[i],main=i, col="gray")
+}
+```
+
+Una vez limpiados los datos, vamos a buscar las correlaciones en función del salario y el resto de variables, visualizando cómo evoluciona el salario en función de cada variable.
+Para ello, utilizamos la función *geom_smooth()* que permite dibujar una línea de regresión en un gráfico de dispersión, lo que puede ayudar a mostrar la tendencia general de los datos y a hacer predicciones sobre el comportamiento futuro de los mismos.
+
+```{r message= FALSE, warning=FALSE}
+histList<- vector('list', ncol(dataAux))
+for(i in seq_along(dataAux)){
+  message(i)
+histList[[i]]<-local({
+  i<-i
+  x <-log(dataAux[[i]])
+  ggp<- ggplot(data = dataAux, aes(x = x, y=data$sal)) + 
+    geom_point(color = "gray30") + geom_smooth(method = lm,color = "firebrick") + 
+    theme_bw() + xlab(names(dataAux)[i]) + ylab("Sal")
+  })
+
+}
+multiplot(plotlist = histList, cols = 3)
+```
+
+A priori no se aprecia ninguna tendencia clara.
+Para ver si existe alguna correlación entre variables, utilizamos la función *cor()*, una función estadística que se utiliza para calcular la correlación entre dos variables.
+La correlación es una medida que indica el grado en el que dos variables están relacionadas entre sí, y puede ser positiva (si las variables aumentan o disminuyen juntas) o negativa (si una variable aumenta cuando la otra disminuye).
+Posteriormente, utilizamos *corrplot()* para representar gráficamente dicha correlación.
+
+```{r message= FALSE, warning=FALSE}
+if(!require("corrplot")) install.packages("corrplot"); library(corrplot)
+
+# Correlaciono variables numéricas
+res <- cor(dataAux)
+
+# Reemplazo valores nulos por 0
+res[is.na(res)]<-0
+
+# Muestro correlacion
+corrplot(res,method="color",tl.col="black", tl.srt=30, order = "AOE",
+number.cex=0.75,sig.level = 0.01, addCoef.col = "black")
+```
+
+Aquí podemos apreciar que no existe prácticamente correlación entre las variables.
+Sin embargo, es importante tener en cuenta que la ausencia de correlación entre las variables no necesariamente implica que no exista una relación entre ellas.
+Por ejemplo, es posible que dos variables estén relacionadas de manera no lineal, lo que puede dificultar la detección de una correlación mediante un análisis estadístico simple.
+En estos casos, es posible que sea necesario utilizar técnicas de análisis más avanzadas para detectar y modelar la relación entre las variables, y así generar un buen modelo de predicción.
+
+En resumen, es posible generar un buen modelo de predicción con variables que no tienen correlación entre sí, pero esto puede requerir una mayor cantidad de datos y un análisis más detallado.
+Si las variables están relacionadas de manera no lineal, puede ser necesario utilizar técnicas de análisis más avanzadas para detectar y modelar esta relación.
+
+## Proceso de PCA
+
+Aplicamos ***factanal()*** (fuente: <https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/factanal>) , una función que permite realizar el análisis factorial.
+Este es un método de reducción de dimensionalidad que se utiliza para extraer los factores o características más importantes que determinan un conjunto de datos.
+
+Por ejemplo, si tenemos un conjunto de datos que contiene las respuestas de diferentes personas a un cuestionario sobre sus hábitos alimenticios, podemos utilizar la función *factanal()*, para extraer los factores que determinan estos hábitos.
+Esto nos permitiría reducir el conjunto de datos a un número más reducido de factores y así facilitar su análisis y visualización.
+
+En este caso, probaremos con, por ejemplo, 3 factores:
+
+```{r message= FALSE, warning=FALSE}
+# Realizar el análisis factorial
+factores <- factanal(na.omit(dataAux), factors=3)
+
+# Mostrar el resultado del análisis
+print(summary(factores))
+```
+
+```{r message= FALSE, warning=FALSE}
+print(factores)
+```
+
+El resultado obtenido por la función *factanal()*, se puede interpretar de la siguiente manera:
+
+-   *Uniquenesses*: muestra la cantidad de factores que se han extraído del conjunto de datos y la suma de los cuadrados residuales para cada uno de estos factores.
+    Esta información nos permite comparar diferentes modelos de factores y elegir el que mejor se ajusta a los datos.
+
+-   *Loadings*: muestra la matriz de cargas factoriales, que indica el grado en el que cada variable contribuye a cada uno de los factores extraídos.
+    Esta información nos permite identificar qué variables son las más importantes para cada factor y cómo se relacionan entre sí.
+
+-   La tercera parte del resultado muestra la matriz de correlaciones factoriales, que indica el grado en el que cada variable está correlacionada con cada uno de los factores extraídos.
+    Esta información nos permite ver cuáles de las variables originales están más relacionadas con cada factor y cómo se relacionan entre sí.
+
+-   Finalmente, muestra un análisis estadístico de que el número de factores elegido sea o no suficiente para tener una muestra representativa del conjunto de datos.
+    En un análisis factorial, el valor de *chi square* y el *p-value* se obtienen a partir del test de esfericidad de Bartlett, que se utiliza para verificar si las variables del conjunto de datos están relacionadas entre sí de manera significativa.
+
+    -   El valor de *chi square* indica el grado en el que las variables del conjunto de datos están relacionadas entre sí.
+        Cuanto mayor sea el valor de *chi square*, más relacionadas estarán las variables entre sí y más adecuado será el análisis factorial para describir la variabilidad total de los datos.
+
+    -   El *p-value* indica la probabilidad de que las variables del conjunto de datos estén relacionadas entre sí de manera aleatoria.
+        Cuanto más pequeño sea el *p-value*, más significativa será la relación entre las variables y más adecuado será el análisis factorial para describir la variabilidad total de los datos.
+
+    Por lo tanto, para interpretar los valores de *chi square* y *p-value* obtenidos en un análisis factorial, es importante tener en cuenta que:
+
+    -   Si el valor de *chi square* es grande y el *p-value* es pequeño, esto indica que las variables del conjunto de datos están altamente relacionadas entre sí y que el análisis factorial es una buena opción para describir la variabilidad total de los datos.
+
+    -   Si el valor de *chi square* es pequeño y el *p-value* es grande, esto indica que las variables del conjunto de datos no están muy relacionadas entre sí y que el análisis factorial puede no ser la mejor opción para describir la variabilidad total de los datos.
+        En este caso, es posible que sea necesario utilizar otro método de análisis.
+
+En resumen, el resultado de *factanal()* nos permite comparar diferentes modelos de factores, identificar qué variables son las más importantes para cada factor y ver cuáles de las variables originales están más relacionadas con cada factor.
+En este caso, se obtiene que las mejores variables para cada factor son *maxExp, numeric.Location* y *numeric.Role*, respectivamente.
+Además, el valor de *chi square* es grande y el *p-value* es pequeño, por lo que estas variables están bien relacionadas entre sí y el análisis factorial es una buena opción para describir la variabilidad total de los datos.
+
+Otra alternativa es usar ***princomp()*** (fuente: <https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/princomp>), una función que permite realizar el análisis de componentes principales.
+Este es un método de reducción de dimensionalidad que se utiliza para encontrar las dimensiones o características principales que explican la mayor cantidad de variabilidad en un conjunto de datos.
+
+Por ejemplo, si tenemos un conjunto de datos que contiene las calificaciones de diferentes estudiantes en diferentes materias, podemos utilizar la función *princomp()* para encontrar las dimensiones principales que explican la mayor cantidad de variabilidad en los datos.
+Esto nos permitiría reducir el conjunto de datos a un número más reducido de dimensiones y así facilitar su análisis y visualización.
+
+*Princomp* solo se puede utilizar para análisis de componentes principales, mientras que *factanal* permite realizar tanto análisis de componentes principales como análisis factorial.
+En general, ambos métodos son útiles para reducir la dimensionalidad de los datos y encontrar patrones en ellos, pero dependiendo de las necesidades y del tipo de datos, uno puede ser más adecuado que el otro.
+
+```{r message= FALSE, warning=FALSE}
+# Realizar el análisis de componentes principales
+pca <- princomp(na.omit(dataAux))
+
+# Mostrar el resultado del análisis
+summary(pca)
+```
+
+```{r message= FALSE, warning=FALSE}
+# Acceder a los pesos de las variables originales
+print(pca$loadings)
+```
+
+```{r message= FALSE, warning=FALSE}
+# Acceder a los factores principales
+print(summary(pca$scores))
+```
+
+El resultado de princomp incluye varios elementos, como la varianza explicada por cada componente principal, los factores principales y los pesos de las variables originales en cada componente principal.
+Puedes usar esta información para entender qué variables son más importantes en tus datos y cómo están relacionadas entre sí.
+
+-   La varianza explicada por cada componente principal mide cuánto de la variabilidad total de los datos se explica por cada componente principal, es decir, cuánto aporta cada componente al análisis.
+    Podemos interpretarla de la siguiente manera:
+
+    -   Si la varianza explicada por un componente principal es **cero**, significa que este componente no aporta nada al análisis y puede ser eliminado.
+
+    -   Si la varianza explicada por un componente principal es **pequeña**, significa que este componente solo aporta una pequeña parte de la variabilidad total de los datos y puede tener poco impacto en el análisis.
+
+    -   Si la varianza explicada por un componente principal es **grande**, significa que este componente aporta mucho a la variabilidad total de los datos y puede ser muy importante en el análisis.
+
+    Así, observamos que las componentes Comp.1 (especialmente), Comp.2 y Comp.3 aportan mucho a la variabilidad total de los datos y puede ser muy importante en el análisis, mientras que el resto aportan una variabilidad menor, teniendo menos impacto en el análisis.
+
+-   Los factores principales son las variables reducidas que se obtienen como resultado del análisis de componentes principales.
+    Estos factores son una combinación lineal de las variables originales y se utilizan para resumir la información de los datos en un número más pequeño de variables.
+
+-   Los pesos de las variables originales en cada componente principal indican qué tanto contribuye cada variable al factor principal correspondiente.
+    Por lo general, las variables con pesos más altos son las que tienen más impacto en el factor principal y son las más importantes en el análisis.
+
+Por lo tanto, los factores principales y los pesos de las variables originales te permiten entender qué variables son más importantes en tus datos y cómo están relacionadas entre sí.
+Esta información puede ser útil para interpretar los resultados del análisis y tomar decisiones en función de ellos.
+En este caso, se obtienen 3 variables principales: *sal* (inversamente correlacionada con el componente Comp.1), *numeric.Key.Skills* (Comp.2)y *numeric.Job.Title* (Comp.3)*.*
+
+## Conclusiones
+
+Los datos estudiados tienen información a cerca de puestos de trabajo.
+Cada registro viene identificado por un título no único y una serie de atributos como los años de experiencia requerida, habilidades principales, localización, área funcional, rol, categoría del rol, industria, longitud, latitud y salario, además de una variable vacía que ha sido eliminada.
+
+Se ha tratado de buscar alguna relación entre el salario y el resto de variables mediante una línea de regresión en un gráfico de dispersión, pero no se ha visto ninguna tendencia clara, por lo que, posteriormente, se ha calculado la correlación entre todas las variables, y, efectivamente, no había practicamente ninguna relación lineal entre variables.
+Llegados a este punto, se han aplicado dos procesos para reducir la dimensionalidad y obtener las variables más relevante.
+
+En este caso, es importante tener en cuenta que el análisis de componentes principales (PCA) y el análisis factorial son dos técnicas diferentes que se utilizan para analizar conjuntos de datos y reducir su dimensionalidad.
+Ambos métodos tienen sus propios supuestos y criterios para determinar qué variables son importantes en el conjunto de datos, por lo que es normal que obtengan diferentes resultados.
+
+En el caso de PCA, los 3 componentes principales que se han obtenido son salario, habilidades principales y título del trabajo.
+Esto indica que estas 3 variables tienen una alta correlación entre sí y, por lo tanto, contribuyen de manera significativa a la varianza en los datos.
+Esto puede deberse a que estas 3 variables estén altamente relacionadas con el rendimiento laboral, por ejemplo, un salario alto podría estar relacionado con habilidades principales más avanzadas y un título universitario.
+
+Por otro lado, el análisis factorial ha determinado que las variables más importantes son experiencia máxima requerida, localización y rol.
+Esto sugiere que estas 3 variables también tienen una alta correlación entre sí y contribuyen de manera significativa a la varianza en los datos.
+Sin embargo, es posible que estas variables estén relacionadas de manera diferente a las determinadas por el PCA, por lo que es importante analizarlas de manera individual para comprender su importancia en el conjunto de datos.
+
+En resumen, el análisis de componentes principales y el análisis factorial han identificado diferentes variables como importantes en el conjunto de datos, pero ambos métodos apuntan a que hay una alta correlación entre las variables seleccionadas.
+Por lo tanto, es importante analizar cada una de estas variables de manera individual para comprender su contribución a la varianza en los datos y su relación con el rendimiento laboral.
+
+# Práctica 2
+
+En esta práctica, continuaremos el estudio iniciado en la Práctica 1, donde abordamos un caso real de minería de datos.
+Utilizaremos el conjunto de datos preparado en esa primera actividad con el fin de extraer conocimiento y dar respuesta a la pregunta o problema definido, aplicando los algoritmos de clustering, regresión o clasificación necesarios para ello.
+Además, evaluaremos el desempeño de los distintos modelos y seleccionaremos el más adecuado al problema en cuestión.
+
+## Objetivos
+
+En esta práctica se utilizarán los modelos vistos durante este semestre.
+Aplicaremos un modelo **no supervisado** basado en el concepto de **distancia** al conjunto de datos preparado, donde interpretarán los resultados obtenidos, y se repetirá el modelo usando una métrica de distancia diferente, con la que compararemos resultados.
+Además, aplicaremos los algoritmos DBSCAN y OPTICS, probando con diferentes valores de eps y interpretando y comparando los resultados con los métodos anteriores.
+
+Posteriormente, aplicaremos un modelo de generación de reglas a partir de árboles de decisión, ajustando las diferentes opciones de creación, con y sin opciones de poda o boosting e interpretaremos y compararemos los resultados.
+
+Finalmente, aplicaremos un modelo supervisado diferente al anterior, a elegir de los vistos en el material docente.
+Interpretaremos y compararemos el resultado con el modelo generado anterior.
+Tambien se Identificarán las eventuales limitaciones del dataset seleccionado y analizarán los riesgos para el caso de uso.
+
+## Ejercicio 1
+
+### 1.1 Se genera un modelo no supervisado.
+
+Una vez analizados y preprocesado los datos, podemos empezar a generar nuestros modelos.
+En este apartado, generaremos un modelo no supervisado utilizando el algoritmo *k-means* para agrupar los datos.
+
+El algoritmo ***k-means*** es un algoritmo de clasificación no supervisada que requiere que de antemano se fijen los k grupos que quieren obtenerse.
+
+Supongamos un juego de datos *X = {x~1~, x~2~, ..., x~n~}* donde cada *x~i~* podría ser una observación con *m* atributos *x~i~ = {x~i1~, x~i2~ , ..., x~im~}.* Para clasificar nuestro juego de datos X, el algoritmo k-means sigue los siguientes pasos:
+
+1.  De entre las *n* observaciones selecciona *k*, al que llamaremos semillas, y denotaremos por *c~j~* donde *j* *= 1,\...,k*.
+    Cada semilla *c~j~* identificará su clúster *C~j~*.
+
+2.  Asigna la observación *x~i~* al clúster *C~t~* cuando la distancia entre la observación *x~i~* y la semilla *c~t~* sea la menor entre todas las semillas.
+    *d(x~i,~c~t~ ) = min{d(x~i,~c~j~ )}, j = 1, ..., k.*
+
+3.  Calcula los nuevos centroides a partir de las medias de los clústeres actuales.
+
+4.  Como criterio de parada, calcula la mejora que se produciría si asignáramos una observación a un clúster al que no pertenece actualmente.
+    Entendiendo por mejora, por ejemplo, la minimización de la distancia de las distintas observaciones a sus respectivos centros
+
+5.  Realiza el cambio que mayor mejora proporciona.
+
+6.  Repite los pasos 3, 4 y 5 hasta que ningún cambio sea capaz de proporcionar una mejora significativa.
+
+Para generar el modelo, primero debemos analizar las medidas de calidad del modelo para cada valor de k, y poder seleccionar así un valor de k óptimo:
+
+### 1.2 Se analizan, muestran y comentan las medidas de calidad del modelo generado.
+
+Para implementarlo, en primer lugar utilizamos la función *daisy()* para calcular todas las diferencias por pares (distancias) entre observaciones en el conjunto de datos.
+Posteriormente, aplicamos k-medias con distintos valores para *k* y calculamos el valor promedio de la silueta en cada caso, entendiendo la silueta como la evaluación de cómo de bien o mal está clasificada la muestra en el clúster al que ha sido asignada.
+Para ello se usa una fórmula que tiene en cuenta la distancia a las muestras de su clúster y la distancia a las muestras del clúster vecino más cercano.
+Probaremos con valores de k entre 2 y 10, ya que
+
+```{r}
+if (!require('cluster')) install.packages('cluster'); library(cluster)
+
+# Como vamos a trabajar con los datos almacenados en dataAux tras el preprocesado
+# Vamos a pasar estos datos a data para una mayor comodidad
+data <- dataAux
+
+# Eliminamos valores nulos que hayan podido quedar tras el preprocesado
+data <- na.omit(data)
+
+# Ya que se trata de un modelo no supervisado, vamos a eliminar la columna de las etiquetas 'sal'
+data <- select(data, -sal)
+
+# Calculo disimilaridad de los datos
+d <- daisy(data)
+
+# Calculo la silueta para cada valor de k
+resultados <- rep(0, 10)
+for (i in c(2,3,4,5,6,7,8,9,10))
+{
+  fit           <- kmeans(data, i)
+  y_cluster     <- fit$cluster
+  sk            <- silhouette(y_cluster, d)
+  resultados[i] <- mean(sk[,3])
+}
+```
+
+Mostramos en un gráfica los valores de las siluetas media de cada prueba para comprobar que número de clústers es el mejor.
+
+```{r}
+# Gráfica con la evolución del valor promedio de la silueta en función de k
+plot(2:10,resultados[2:10],type="o",col="blue",pch=0,xlab="Número de clusters",ylab="Silueta")
+```
+
+Como era de esperar, la mejora más significativa se obtiene para valores de k distinto al número de posibles resultados de salario, ya que este número de posibles salarios es muy elevado y es complicado dar con ese valor exacto, que, además, podría estar restringiendo el modelo a la entrada de nuevos valores.
+En este caso se obtiene que la mejora más significativa se produce con k=3, lo cual sería interesante plantear como 3 rangos o franjas de salario.
+
+Otra forma de evaluar cual es el mejor número de clústers es considerar el mejor modelo, aquel que ofrece la menor suma de los cuadrados de las distancias de los puntos de cada grupo con respecto a su centro (withinss), con la mayor separación entre centros de grupos (betweenss).
+Como se puede comprobar es una idea conceptualmente similar a la silueta.
+Una manera común de hacer la selección del número de clústers consiste en aplicar el método *elbow* (codo), que no es más que la selección del número de clústers en base a la inspección de la gráfica que se obtiene al iterar con el mismo conjunto de datos para distintos valores del número de clústers.
+Se seleccionará el valor que se encuentra en el "codo" de la curva.
+
+```{r}
+# Calculo la suma de los cuadrados de las distancias de los puntos de cada
+# grupo respecto de su centro para cada valor de k
+resultados <- rep(0, 10)
+for (i in c(2,3,4,5,6,7,8,9,10))
+{
+  fit           <- kmeans(data, i)
+  resultados[i] <- fit$tot.withinss
+}
+plot(2:10,resultados[2:10],type="o",col="blue",pch=0,xlab="Número de clusters",ylab="tot.tot.withinss")
+```
+
+En este caso el número óptimo de clústers son 4 que es cuando la curva comienza a estabilizarse, el cual tiene también un alto valor de silueta.
+
+También se puede usar la función *kmeansruns* del paquete **fpc** que ejecuta el algoritmo kmeans con un conjunto de valores, para después seleccionar el valor del número de clústers que mejor funcione de acuerdo a dos criterios: la silueta media ("ASW") y *Calinski-Harabasz* ("CH").
+
+La **silueta media**, también conocida como "average silhouette width" (ASW), es una medida de cómo similares son los puntos de datos dentro de un cluster en comparación con los puntos de datos en otros clusters.
+El valor de la silueta media varía entre -1 y 1, donde un valor cercano a 1 indica una alta similitud entre los puntos de datos dentro del mismo cluster y una baja similitud entre los puntos de datos de diferentes clusters.
+Un valor cercano a -1 indica que los puntos de datos de un cluster son más similares a los de otro cluster diferente al que esta asignado.
+
+El **coeficiente de Calinski-Harabasz**, también conocido como "Calinski-Harabasz index" (CH), es una medida de la relación entre la varianza dentro de los clusters y la varianza entre los clusters.
+Este coeficiente se calcula como el ratio entre la varianza total del conjunto de datos y la varianza promedio dentro de los clusters.
+El valor de CH tiende a aumentar a medida que se mejora la calidad de la agrupación, es decir, cuando hay una mayor diferencia entre los grupos y menor variabilidad dentro de los mismos.
+
+Es importante señalar que no existe una medida única que sea considerada como la mejor para evaluar el rendimiento de un agrupamiento, y la elección de una medida puede depender del problema específico y de las preferencias del usuario.
+
+```{r}
+if (!require('fpc')) install.packages('fpc'); library(fpc)
+
+# Criterio de la silueta media para cada valor de k
+fit_ch  <- kmeansruns(data, krange = 1:10, criterion = "ch") 
+
+# Criterio de Calinski-Harabasz para cada valor de k
+fit_asw <- kmeansruns(data, krange = 1:10, criterion = "asw") 
+```
+
+Podemos comprobar el valor con el que se ha obtenido el mejor resultado.
+
+```{r}
+# Muestro resultados
+fit_ch$bestk
+fit_asw$bestk
+```
+
+Observemos como la primera recomendación es de 4 clústers mientras que la segunda es de 3, coincidiendo con las obtenidas anteriormente.
+
+Una buena estrategia es ver que pasa para diferentes valores de k utilizando los dos criterios.
+
+```{r}
+# Muestro la evolución del valor de la silueta media en función de k
+plot(1:10,fit_ch$crit,type="o",col="blue",pch=0,xlab="Número de clústers",ylab="Criterio Calinski-Harabasz")
+```
+
+```{r}
+# Muestro la evolución del valor de Calinski-Harabasz en función de k
+plot(1:10,fit_asw$crit,type="o",col="blue",pch=0,xlab="Número de clústers",ylab="Criterio silueta media")
+```
+
+Los resultados coinciden los que hemos obtenido anteriormente.
+Con el criterio de la silueta media se obtienen 3 clústers y con el *Calinski-Harabasz* se obtienen 4.
+
+Como se ha comprobado, conocer el número óptimo de clústers no es un problema fácil.
+Tampoco lo es la evaluación de los modelos de agregación.
+
+Ya que no sabemos de antemano cuál es el valor real de k y tras este estudio parecen válidos valores de k tanto 3 como 4, vamos a ver cómo se ha comportado *kmeans* en el caso de pedirle 3 y 4 clústers.
+Para eso comparamos visualmente los campos dos a dos, con el valor real que sabemos está almacenado en el campo "sal" del dataset original.
+
+Además, en cuanto a los valores obtenidos por las medidas de calidad, para ambos valores de k se obtiene un valor de silueta media cercano a **0.35**, bastante lejos de los valores cercanos a 1 que se buscan, por lo que el modelo no será muy preciso.
+
+**K = 3**
+
+```{r}
+# Aplico k-means para k=3
+data3clusters <- kmeans(data, 3)
+
+# Muestro clasificación obtenida por k-means
+plot(data, col=data3clusters$cluster, main="Clasificación k-means")
+```
+
+```{r}
+# Muestro clasificación real
+plot(data, col=as.factor(dataAux$sal), main="Clasificación real")
+```
+
+Como podemos apreciar, el número de clústers no coincide, ya que, como hemos mencionado anteriormente, el número de posibles valores de salario es muy elevado, lo cual sería más adecuado para un problema de regresión.
+Sin embargo, podemos convertirlo en un problema de clasificación discretizando la variable objetivo.
+En este caso, la discretizaremos a 3 valores, para ello, vamos a calcular los cuantiles 33 y 66 que marcarán los límites de los rangos de salario.
+Utilizaremos la función *quantile()* para obtener dichos límites:
+
+```{r}
+quantile_33 <- quantile(dataAux$sal, 0.33)
+quantile_66 <- quantile(dataAux$sal, 0.66)
+
+print(quantile_33)
+print(quantile_66)
+```
+
+Obtenemos que, los límites para dividir los salarios en 3 grupos del mismo tamaño son 3251 y 5165 (redondeamos al entero más cercano).
+
+```{r}
+# Discretizo "sal"
+data$sal3clusters <- cut(na.omit(dataAux)$sal, c(0,3251,5165,Inf), labels=c("0-3251", "3252-5164", ">5164"))
+
+# La almaceno en otra variable para no tener que recalcularlo posteriormente en el nuevo modelo
+sal3clusters <- data$sal3clusters
+
+summary(data$sal3clusters)
+```
+
+Vemos que los datos se logran distribuir de forma equilibrada.
+A continuación, mostramos esta nueva clasificación real discretizada.
+
+```{r}
+# Muestro clasificación real
+plot(data, col=as.factor(data$sal3clusters), main="Clasificación real")
+```
+
+```{r}
+# Muestro la distribución real de cada cluster para saber a cual pertenece cada color
+clusters = c("0-3251", "3252-5164", ">5164")
+
+cluster_1 <- subset(data, sal3clusters==clusters[1])
+plot(cluster_1, col=as.factor(cluster_1$sal3clusters), main=clusters[1])
+
+cluster_2 <- subset(data, sal3clusters==clusters[2])
+plot(cluster_2, col=as.factor(cluster_2$sal3clusters), main=clusters[2])
+
+cluster_3 <- subset(data, sal3clusters==clusters[3])
+plot(cluster_3, col=as.factor(cluster_3$sal3clusters), main=clusters[3])
+```
+
+Clasificación real:
+
+-   Negro: [0-3251]
+
+-   Rojo: [3252-5164]
+
+-   Verde: \>5164
+
+A continuación, como técnica de medida externa, vamos a calcular la exactitud del modelo, es decir, el porcentaje de datos clasificados correctamente.
+
+Tras generar un modelo k-means con 3 clusteres tenemos un vector de predicciones con valores 1, 2 o 3.
+El vector de etiquetas tiene los valores "0-3251", "3252-5164" y "\>5164".
+Para saber a qué grupo pertenece cada valor, vamos a ver cuantas coincidencias hay para cada asignación posible.
+
+```{r}
+# Coincidencias del cluster 1 con cada rango
+coincidencias1 = c(
+  sum(data3clusters$cluster == 1 & data$sal3clusters == "0-3251"),
+  sum(data3clusters$cluster == 1 & data$sal3clusters == "3252-5164"),
+  sum(data3clusters$cluster == 1 & data$sal3clusters == ">5164"))
+
+# Coincidencias del cluster 2 con cada rango
+coincidencias2 = c(
+  sum(data3clusters$cluster == 2 & data$sal3clusters == "0-3251"),
+  sum(data3clusters$cluster == 2 & data$sal3clusters == "3252-5164"),
+  sum(data3clusters$cluster == 2 & data$sal3clusters == ">5164"))
+
+# Coincidencias del cluster 3 con cada rango
+coincidencias3 = c(
+  sum(data3clusters$cluster == 3 & data$sal3clusters == "0-3251"),
+  sum(data3clusters$cluster == 3 & data$sal3clusters == "3252-5164"),
+  sum(data3clusters$cluster == 3 & data$sal3clusters == ">5164"))
+
+# Matriz de coincidencias
+coincidencias <- data.frame(
+  "cluster" = numeric(),
+  "0-3251" = numeric(), 
+  "3252-5164" = numeric(), 
+  ">5164" = numeric())
+
+coincidencias <- rbind(coincidencias, c(1,coincidencias1))
+coincidencias <- rbind(coincidencias, c(2,coincidencias2))
+coincidencias <- rbind(coincidencias, c(3,coincidencias3))
+
+colnames(coincidencias) <- c("cluster","0-3251","3252-5164",">5164")
+
+print(coincidencias)
+```
+
+De esta forma, podemos asignar el cluster 1 al rango \>5164, el cluster 2 al rango [0-3251] y el cluster 3 al rango [3252-5164].
+
+```{r}
+data$predictions <- as.factor(
+  ifelse(data3clusters$cluster == 1, ">5164",
+         ifelse(data3clusters$cluster == 2, "0-3251",
+                ifelse(data3clusters$cluster == 3, "3252-5164", "NA"))))
+
+print(head(data))
+```
+
+A continuación, calculamos la exactitud del modelo, calculada como $\frac{datos\_bien\_clasificados}{datos\_totales}$.
+
+```{r}
+exactitud <- sum(data$sal3clusters == data$predictions)/nrow(data)
+print(exactitud)
+```
+
+Como podemos observar, el modelo clasifica correctamente únicamente el 33,4% de los datos, lo cual es un resultado bastante pobre.
+
+**K = 4**
+
+A continuación repetimos el proceso anterior para k=4.
+Para ello, debo ignorar la variables 'sal3clusters' y 'predictions' creadas:
+
+```{r}
+# Elimino las columnas 'sal3clusters' y 'predictions'
+data <- select(data, -sal3clusters, -predictions)
+
+# Aplico k-means para k=4
+data4clusters <- kmeans(data, 4)
+
+# Muestro clasificación obtenida por k-means
+plot(data, col=data4clusters$cluster, main="Clasificación k-means")
+```
+
+A continuación, discretizamos la variable 'sal' para distribuir los datos en 4 clústeres.
+Para ello, vamos a calcular los cuantiles 25, 50 y 75 que marcarán los límites de los rangos de salario.
+Utilizaremos la función *quantile()* para obtener dichos límites:
+
+```{r}
+quantile_25 <- quantile(dataAux$sal, 0.25)
+quantile_50 <- quantile(dataAux$sal, 0.50)
+quantile_75 <- quantile(dataAux$sal, 0.75)
+
+print(quantile_25)
+print(quantile_50)
+print(quantile_75)
+```
+
+Obtenemos que, los límites para dividir los salarios en 3 grupos del mismo tamaño son 2864, 4213 y 5623 (redondeamos al entero más cercano).
+
+```{r}
+# Discretizo "sal"
+data$sal4clusters <- cut(na.omit(dataAux)$sal, c(0,2864,4213,5623,Inf), labels=c("0-2864", "2865-4213", "4214-5623", ">5623"))
+
+# La almaceno en otra variable para no tener que recalcularlo posteriormente en el nuevo modelo
+sal4clusters <- data$sal4clusters
+
+summary(data$sal4clusters)
+```
+
+Vemos que los datos se logran distribuir de forma equilibrada.
+A continuación, mostramos esta nueva clasificación real discretizada.
+
+```{r}
+# Muestro clasificación real
+plot(data, col=as.factor(data$sal4clusters), main="Clasificación real")
+```
+
+```{r}
+# Muestro la distribución real de cada cluster para saber a cual pertenece cada color
+clusters = c("0-2864", "2865-4213", "4214-5623", ">5623")
+
+cluster_1 <- subset(data, sal4clusters==clusters[1])
+plot(cluster_1, col=as.factor(cluster_1$sal4clusters), main=clusters[1])
+
+cluster_2 <- subset(data, sal4clusters==clusters[2])
+plot(cluster_2, col=as.factor(cluster_2$sal4clusters), main=clusters[2])
+
+cluster_3 <- subset(data, sal4clusters==clusters[3])
+plot(cluster_3, col=as.factor(cluster_3$sal4clusters), main=clusters[3])
+
+cluster_4 <- subset(data, sal4clusters==clusters[4])
+plot(cluster_4, col=as.factor(cluster_4$sal4clusters), main=clusters[4])
+```
+
+Clasificación real:
+
+-   Negro: [0-2864]
+
+-   Rojo: [2865-4213]
+
+-   Verde: [4214-5623]
+
+-   Azul: \>5623
+
+A continuación, como técnica de medida externa, vamos a calcular la exactitud del modelo, es decir, el porcentaje de datos clasificados correctamente.
+
+Tras generar un modelo k-means con 4 clusteres tenemos un vector de predicciones con valores 1, 2, 3 o 4.
+El vector de etiquetas tiene los valores "0-2864", "2865-4213", "4214-5623" y "\>5623".
+Para saber a qué grupo pertenece cada valor, vamos a ver cuantas coincidencias hay para cada asignación posible.
+
+```{r}
+# Coincidencias del cluster 1 con cada rango
+coincidencias1 = c(
+  sum(data4clusters$cluster == 1 & data$sal4clusters == "0-2864"),
+  sum(data4clusters$cluster == 1 & data$sal4clusters == "2865-4213"),
+  sum(data4clusters$cluster == 1 & data$sal4clusters == "4214-5623"),
+  sum(data4clusters$cluster == 1 & data$sal4clusters == ">5623"))
+
+# Coincidencias del cluster 2 con cada rango
+coincidencias2 = c(
+  sum(data4clusters$cluster == 2 & data$sal4clusters == "0-2864"),
+  sum(data4clusters$cluster == 2 & data$sal4clusters == "2865-4213"),
+  sum(data4clusters$cluster == 2 & data$sal4clusters == "4214-5623"),
+  sum(data4clusters$cluster == 2 & data$sal4clusters == ">5623"))
+
+# Coincidencias del cluster 3 con cada rango
+coincidencias3 = c(
+  sum(data4clusters$cluster == 3 & data$sal4clusters == "0-2864"),
+  sum(data4clusters$cluster == 3 & data$sal4clusters == "2865-4213"),
+  sum(data4clusters$cluster == 3 & data$sal4clusters == "4214-5623"),
+  sum(data4clusters$cluster == 3 & data$sal4clusters == ">5623"))
+
+# Coincidencias del cluster 4 con cada rango
+coincidencias4 = c(
+  sum(data4clusters$cluster == 4 & data$sal4clusters == "0-2864"),
+  sum(data4clusters$cluster == 4 & data$sal4clusters == "2865-4213"),
+  sum(data4clusters$cluster == 4 & data$sal4clusters == "4214-5623"),
+  sum(data4clusters$cluster == 4 & data$sal4clusters == ">5623"))
+
+# Matriz de coincidencias
+coincidencias <- data.frame(
+  "cluster" = numeric(),
+  "0-2864" = numeric(), 
+  "2865-4213" = numeric(), 
+  "4214-5623" = numeric(), 
+  ">5623" = numeric())
+
+coincidencias <- rbind(coincidencias, c(1,coincidencias1))
+coincidencias <- rbind(coincidencias, c(2,coincidencias2))
+coincidencias <- rbind(coincidencias, c(3,coincidencias3))
+coincidencias <- rbind(coincidencias, c(4,coincidencias4))
+
+colnames(coincidencias) <- c("cluster","0-2864","2865-4213","4214-5623",">5623")
+
+print(coincidencias)
+```
+
+De esta forma, podemos asignar el cluster 1 al rango [4214-5623], el cluster 2 al rango \>5623, el cluster 3 al rango [0-2864] y el cluster 4 al rango [2865-4213].
+
+```{r}
+data$predictions <- as.factor(
+  ifelse(data4clusters$cluster == 1, "4214-5623",
+         ifelse(data4clusters$cluster == 2, ">5623",
+                ifelse(data4clusters$cluster == 3, "0-2864", 
+                       ifelse(data4clusters$cluster == 4, "2865-4213", "NA")))))
+
+print(head(data))
+```
+
+A continuación, calculamos la exactitud del modelo
+
+```{r}
+exactitud <- sum(data$sal4clusters == data$predictions)/nrow(data)
+print(exactitud)
+```
+
+Como podemos observar, el modelo clasifica correctamente únicamente el 27,48% de los datos, lo cual es un resultado bastante pobre.
+
+### 1.3 Se interpretan los resultados y comentan las conclusiones.
+
+Tanto en la clasificación con 3 como con 4 clústeres, no se aprecia una distribución clara de las clases, lo cual significa que los puntos de datos en el conjunto de entrenamiento no están claramente agrupados o separados en los tres clusters especificados.
+Como resultado, el modelo generado es será capaz de clasificar correctamente los puntos de datos, y, por lo tanto, el resultado no coincide con la clasificación real.
+Además, esto también puede generar un alto grado de incertidumbre en las predicciones ya que el modelo no tiene una buena comprensión de cómo las diferentes clases están distribuidas en los datos.
+Para mejorar el rendimiento del modelo, es recomendable revisar el proceso de selección de características y la metodología utilizada para agrupar los datos, para asegurar que los datos están siendo agrupados de manera adecuada y significativa en relación con la variable de clasificación.
+
+Además, las medidas de calidad obtenidas también apoyan esta conclusión.
+La Silueta media es una medida de similitud entre los puntos de datos dentro de un cluster y los puntos de datos en otros clusters, un valor cercano a 1 indica alta similitud entre los puntos dentro del mismo cluster y baja similitud entre los puntos de diferentes clusters, un valor cercano a -1 indica que los puntos de un cluster son más similares a los de otro cluster diferente al que esta asignado.
+El hecho de que la silueta media sea cercana a 0.35 indica que la similitud entre los puntos dentro del mismo cluster es moderada, pero puede no ser suficiente para considerarlo como un buen modelo.
+
+También se podría utilizar el Coeficiente de Calinski-Harabasz, en el que se obtiene un valor máximo cercano a 350 para k=4.
+Aunque un alto valor de CH es normalmente considerado como indicativo de una buena agrupación, en este caso, es importante tener en cuenta que este coeficiente tiene una dependencia directa con el número de observaciones y clústeres, por lo que no se puede comparar entre diferentes conjuntos de datos o configuraciones del algoritmo.
+Por tanto, estos resultados deben ser interpretados en combinación con otras medidas de calidad y conocer el contexto del problema.
+Además, se observa que el valor obtenido para k = 2 es muy bajo, este puede ser un indicativo de que el agrupamiento no es significativo, ya que con solo dos clusters no se tiene suficiente capacidad de dividir los datos en grupos relevantes.
+
+Por último, al calcular la exactitud se aprecia que ambos modelos, tanto el de 3 como el de 4 clústeres, tienen un rendimiento bajo, con una exactitud del 33% y 28% respectivamente.
+Esto indica que el modelo no es capaz de clasificar correctamente la gran mayoría de los puntos de datos en el conjunto de entrenamiento, lo que también sugiere que los datos no están siendo agrupados de manera adecuada
+
+En conclusión, el análisis de los resultados y las medidas de calidad sugieren que el modelo generado no es capaz de clasificar correctamente los puntos de datos, y presenta un alto grado de incertidumbre en las predicciones.
+Es recomendable revisar el proceso de selección de características y la metodología utilizada para agrupar los datos para mejorar el rendimiento del modelo y asegurar que los datos están siendo agrupados de manera adecuada y significativa en relación con la variable de clasificación.
+
+## Ejercicio 2
+
+### 2.1 Se genera de nuevo el modelo no supervisado anterior, pero usando una métrica de distancia distinta.
+
+El algoritmo k-means utiliza como métrica de distancia la **distancia Euclidiana**, una medida de distancia que se calcula como $\sqrt{(x_2-x_1)^2 + (y_2-y_1)^2}$.
+Es una medida que tiene en cuenta la distancia en cada dimensión entre dos puntos, y es considerada como una medida de distancia "real" ya que cumple con las propiedades de distancia, es decir, es simétrica, positiva y cumple con el triangulo.
+
+Sin embargo, es importante tener en cuenta que existen otras medidas de distancia que pueden ser más adecuadas para ciertos tipos de datos o problemas, como la distancia de Manhattan, la distancia de Mahalanobis, entre otras.
+
+En este caso vamos a utilizar la **distancia Manhattan**, también conocida como distancia L1, es una medida de distancia entre dos puntos en un espacio n-dimensional.
+Se calcula sumando la diferencia absoluta entre las coordenadas de cada punto.
+Es decir, se calcula la suma de las diferencias absolutas entre las coordenadas de cada punto.
+Esta distancia es útil en problemas en los que las coordenadas de los puntos representan distancias o tiempos, y se desea medir el costo total de viajar entre dos puntos.
+La fórmula para calcular la distancia de Manhattan entre dos puntos $x=(x_1,x_2,..,x_n)$ y $y=(y_1,y_2,..,y_n)$ es: $d(x,y)= \sum_{i}{\|x_i-y_i\|}$.
+
+La distancia de Manhattan es una medida de distancia más restrictiva que la distancia Euclidiana, ya que no tiene en cuenta la dirección de los puntos, sólo la distancia en las dimensiones individuales.
+Por lo tanto, la distancia de Manhattan se utiliza comúnmente en problemas en los que la distancia Euclidiana no es adecuada.
+
+Dado que el algoritmo k-means únicamente aplica la métrica de distancia Euclidiana, para utilizar la distancia Manhattan vamos a utilizar el algoritmo **Hierarchical Clustering**, un algoritmo que se utiliza para agrupar un conjunto de objetos en diferentes grupos (clusters) de acuerdo a cierta medida de similitud.
+Existen dos tipos de enfoques para el agrupamiento jerárquico: el enfoque aglomerativo y el enfoque divisivo.
+
+La función ***hclust()*** utiliza el enfoque aglomerativo, que comienza con cada punto de datos como un cluster individual y, a medida que se avanza en el proceso, va combinando los clusters más cercanos en un único cluster hasta que todos los puntos de datos estén agrupados en un solo cluster.
+Esta función utiliza una medida de distancia para calcular la similitud entre los puntos de datos y los centroides de cada cluster, y se pueden pasar diferentes medidas de distancia como argumentos.
+
+Además, se utilizará la función **daisy()** del paquete **cluster** para calcular la matriz de distancias utilizando la distancia de Manhattan y luego pasarla como argumento a la función **hclust()**.
+
+```{r}
+# Recuperamos los datos preprocesados
+data <- dataAux
+
+# Eliminamos valores nulos que hayan podido quedar tras el preprocesado
+data <- na.omit(data)
+
+# Ya que se trata de un modelo no supervisado, vamos a eliminar la columna de las etiquetas 'sal'
+data <- select(data, -sal)
+
+# Creo el modelo Hierarchical Clustering
+hc_model <- hclust(daisy(data, metric = "manhattan"))
+
+# Exporto el árbol a png
+if(!require(grid)) install.packages('grid'); library(grid)
+png("hc_tree_manhattan.png", res=80, height=1200, width=2800) 
+   plot(hc_model, gp = gpar(fontsize = 30))
+dev.off()
+```
+
+La función *png()* es utilizada para crear un archivo de imagen en formato PNG con una resolución de 80 píxeles por pulgada, una altura de 1200 píxeles y un ancho de 2800 píxeles y poder de esta forma visualizar con mayor facilidad el agrupamiento jerárquico generado.
+La función *plot()* es utilizada para dibujar el modelo de árbol de decisión especificado en el archivo de imagen, y la función gpar() se utiliza para especificar algunos parámetros de gráfico adicionales, como el tamaño de la fuente.
+Finalmente, la función *dev.off()* se utiliza para cerrar el dispositivo de gráficos y guardar el archivo de imagen.
+
+A continuación, una vez generado el modelo, debemos asignar los puntos de datos a los clusteres correspondientes.
+Para ello, utilizamos la función ***cutree(),*** una función del paquete **stats** que se utiliza para cortar el dendrograma generado por **hclust()** y asignar los puntos de datos a los clusters correspondientes.
+Esta función toma como entrada el objeto "hc_model" generado por **hclust()** y un número k que representa el número de clusters deseados.
+La función devuelve un vector de etiquetas, donde cada etiqueta representa a qué cluster pertenece cada punto de datos.
+
+Al igual que con k-means, probaremos con k=3 y con k=4.
+
+**k=3**
+
+```{r}
+if (!require('stats')) install.packages('stats'); library(stats)
+
+# Asigno los puntos de datos a 3 clusteres
+data3clusters <- cutree(hc_model, k = 3)
+
+# Muestro clasificación obtenida por k-means
+plot(data, col=data3clusters, main="Clasificación hc")
+```
+
+A continuación, como técnica de medida externa, vamos a calcular la exactitud del modelo, es decir, el porcentaje de datos clasificados correctamente.
+
+Tras generar un modelo k-means con 3 clusteres tenemos un vector de predicciones con valores 1, 2 o 3.
+El vector de etiquetas tiene los valores "0-3251", "3252-5164" y "\>5164".
+Para saber a qué grupo pertenece cada valor, vamos a ver cuantas coincidencias hay para cada asignación posible.
+
+```{r}
+# Coincidencias del cluster 1 con cada rango
+coincidencias1 = c(
+  sum(data3clusters == 1 & sal3clusters == "0-3251"),
+  sum(data3clusters == 1 & sal3clusters == "3252-5164"),
+  sum(data3clusters == 1 & sal3clusters == ">5164"))
+
+# Coincidencias del cluster 2 con cada rango
+coincidencias2 = c(
+  sum(data3clusters == 2 & sal3clusters == "0-3251"),
+  sum(data3clusters == 2 & sal3clusters == "3252-5164"),
+  sum(data3clusters == 2 & sal3clusters == ">5164"))
+
+# Coincidencias del cluster 3 con cada rango
+coincidencias3 = c(
+  sum(data3clusters == 3 & sal3clusters == "0-3251"),
+  sum(data3clusters == 3 & sal3clusters == "3252-5164"),
+  sum(data3clusters == 3 & sal3clusters == ">5164"))
+
+# Matriz de coincidencias
+coincidencias <- data.frame(
+  "cluster" = numeric(),
+  "0-3251" = numeric(), 
+  "3252-5164" = numeric(), 
+  ">5164" = numeric())
+
+coincidencias <- rbind(coincidencias, c(1,coincidencias1))
+coincidencias <- rbind(coincidencias, c(2,coincidencias2))
+coincidencias <- rbind(coincidencias, c(3,coincidencias3))
+
+colnames(coincidencias) <- c("cluster","0-3251","3252-5164",">5164")
+
+print(coincidencias)
+```
+
+De esta forma, podemos asignar el cluster 1 al rango [3252-5164], el cluster 2 al rango [0-3251] y el cluster 3 al rango \>5164.
+
+```{r}
+data$predictions <- as.factor(
+  ifelse(data3clusters == 1, "3252-5164",
+         ifelse(data3clusters == 2, "0-3251",
+                ifelse(data3clusters == 3, ">5164", "NA"))))
+
+print(head(data))
+```
+
+A continuación, calculamos la exactitud del modelo:
+
+```{r}
+exactitud <- sum(sal3clusters == data$predictions)/nrow(data)
+print(exactitud)
+```
+
+Como podemos observar, el modelo clasifica correctamente únicamente el 36,36% de los datos, lo cual es un resultado bastante pobre.
+
+**k=4**
+
+```{r}
+# Asigno los puntos de datos a 3 clusteres
+data4clusters <- cutree(hc_model, k = 4)
+
+# Muestro clasificación obtenida por k-means
+plot(data, col=data4clusters, main="Clasificación hc")
+```
+
+A continuación, como técnica de medida externa, vamos a calcular la exactitud del modelo, es decir, el porcentaje de datos clasificados correctamente.
+
+Tras generar un modelo k-means con 4 clusteres tenemos un vector de predicciones con valores 1, 2, 3 o 4.
+El vector de etiquetas tiene los valores "0-2864", "2865-4213", "4214-5623" y "\>5623".
+Para saber a qué grupo pertenece cada valor, vamos a ver cuantas coincidencias hay para cada asignación posible.
+
+```{r}
+# Coincidencias del cluster 1 con cada rango
+coincidencias1 = c(
+  sum(data4clusters == 1 & sal4clusters == "0-2864"),
+  sum(data4clusters == 1 & sal4clusters == "2865-4213"),
+  sum(data4clusters == 1 & sal4clusters == "4214-5623"),
+  sum(data4clusters == 1 & sal4clusters == ">5623"))
+
+# Coincidencias del cluster 2 con cada rango
+coincidencias2 = c(
+  sum(data4clusters == 2 & sal4clusters == "0-2864"),
+  sum(data4clusters == 2 & sal4clusters == "2865-4213"),
+  sum(data4clusters == 2 & sal4clusters == "4214-5623"),
+  sum(data4clusters == 2 & sal4clusters == ">5623"))
+
+# Coincidencias del cluster 3 con cada rango
+coincidencias3 = c(
+  sum(data4clusters == 3 & sal4clusters == "0-2864"),
+  sum(data4clusters == 3 & sal4clusters == "2865-4213"),
+  sum(data4clusters == 3 & sal4clusters == "4214-5623"),
+  sum(data4clusters == 3 & sal4clusters == ">5623"))
+
+# Coincidencias del cluster 4 con cada rango
+coincidencias4 = c(
+  sum(data4clusters == 4 & sal4clusters == "0-2864"),
+  sum(data4clusters == 4 & sal4clusters == "2865-4213"),
+  sum(data4clusters == 4 & sal4clusters == "4214-5623"),
+  sum(data4clusters == 4 & sal4clusters == ">5623"))
+
+# Matriz de coincidencias
+coincidencias <- data.frame(
+  "cluster" = numeric(),
+  "0-2864" = numeric(), 
+  "2865-4213" = numeric(), 
+  "4214-5623" = numeric(), 
+  ">5623" = numeric())
+
+coincidencias <- rbind(coincidencias, c(1,coincidencias1))
+coincidencias <- rbind(coincidencias, c(2,coincidencias2))
+coincidencias <- rbind(coincidencias, c(3,coincidencias3))
+coincidencias <- rbind(coincidencias, c(4,coincidencias4))
+
+colnames(coincidencias) <- c("cluster","0-2864","2865-4213","4214-5623",">5623")
+
+print(coincidencias)
+```
+
+De esta forma, podemos asignar el cluster 1 al rango [4214-5623], el cluster 2 al rango [0-2864], el cluster 3 al rango [2865-4213] y el cluster 4 al rango \>5623.
+
+```{r}
+data$predictions <- as.factor(
+  ifelse(data4clusters == 1, "4214-5623",
+         ifelse(data4clusters == 2, "0-2864",
+                ifelse(data4clusters == 3, "2865-4213", 
+                       ifelse(data4clusters == 4, ">5623", "NA")))))
+
+print(head(data))
+```
+
+A continuación, calculamos la exactitud del modelo:
+
+```{r}
+exactitud <- sum(sal4clusters == data$predictions)/nrow(data)
+print(exactitud)
+```
+
+Como podemos observar, el modelo clasifica correctamente únicamente el 28,54% de los datos, lo cual es un resultado bastante pobre.
+
+### 2.2 Se muestran y comentan las medidas de calidad del modelo generado.
+
+El modelo de Hierarchical Clustering obtiene una exactitud del 36,36% para k=3, y del 28,54% para k=4, unos resultados muy similares a los del modelo de k-means.
+
+En el caso de Hierarchical Clustering, si utilizamos la distancia Manhattan para medir la similitud entre los puntos de datos y los clusters, el algoritmo será sensible a las diferencias en las escalas de los atributos y será capaz de manejar mejor los conjuntos de datos con escalas diferentes.
+Sin embargo, es importante tener en cuenta que la distancia Manhattan tiende a generar clusters más compactos y menos dispersos que la distancia Euclidea.
+Esto podría dar lugar a una mejor separación entre los puntos de datos pertenecientes a diferentes clusters, pero también podría generar clusters menos significativos si los datos no están distribuidos de manera compacta.
+
+### 2.3 Adicionalmente se comparan los dos modelos no supervisados con métricas de distancia distintas.
+
+En primer lugar, al utilizar la distancia Euclidiana en el algoritmo k-means, se estaría midiendo la similitud entre los puntos de datos y los centroides de los clusters en términos de su distancia geométrica, es decir, cuán cerca o lejos están los puntos de datos de los centroides de los clusters en el espacio de los atributos.
+A menor distancia Euclidiana entre un punto de datos y el centroide de un cluster, mayor será la similitud entre el punto de datos y el cluster.
+Esto podría ser adecuado para conjuntos de datos donde los atributos tienen la misma escala y son numéricos.
+Sin embargo, si los atributos tienen escalas diferentes o son categóricos, la distancia Euclidiana podría no ser la mejor opción.
+
+Por otro lado, al utilizar la distancia Manhattan en el algoritmo Hierarchical Clustering se estaría midiendo la similitud entre los puntos de datos y los clusters en términos de la suma de las diferencias absolutas de las coordenadas de los puntos.
+Esto podría ser adecuado para conjuntos de datos con escalas diferentes o con atributos categóricos, ya que es menos sensible a las diferencias en las escalas.
+Sin embargo, la distancia Manhattan tiende a generar clusters más compactos y menos dispersos, lo que podría generar clusters menos significativos si los datos no están distribuidos de manera compacta.
+
+En resumen, comparar los dos modelos no supervisados con métricas de distancia distintas es importante para evaluar cuál de ellos es más adecuado para el conjunto de datos específico.
+La distancia euclidiana es adecuada para conjuntos de datos donde los atributos tienen la misma escala y son numéricos, mientras que la distancia Manhattan es más adecuada para conjuntos de datos con escalas diferentes o con atributos categóricos.
+Es importante evaluar las medidas de calidad del modelo y conocer el contexto del problema para determinar cuál de las dos distancias es la mejor opción para el agrupamiento de los datos.
+
+### 2.4 Se interpretan los resultados y comentan las conclusiones.
+
+Los resultados obtenidos indican que tanto el modelo generado con el algoritmo k-means y como el generado con el algoritmo Hierarchical Clustering no son capaces de clasificar correctamente la gran mayoría de los puntos de datos.
+Esto se debe a que los puntos de datos no están claramente agrupados o separados en los clústeres especificados, lo cual genera un alto grado de incertidumbre en las predicciones y un rendimiento bajo en las medidas de calidad obtenidas.
+
+Por ello, para este tipo de problemas se suelen utilizar modelos de regresión, que permiten predecir una variable continua en función de otras variables, en lugar de clasificar puntos de datos en diferentes categorías.
+Estos modelos de regresión pueden ser más precisos y fiables en situaciones donde los datos no están claramente agrupados o separados en los clústeres especificados.
+En general, es importante evaluar diferentes metodologías y técnicas para encontrar el enfoque más adecuado para cada problema específico y lograr un buen rendimiento del modelo.
+
+## Ejercicio 3
+
+### 3.1 Se aplican lo algoritmos DBSCAN y OPTICS de forma correcta.
+
+En este ejercicio vamos ha trabajar los algoritmos **DBSCAN** y **OPTICS** como métodos de clustering que permiten la generación de grupos no radiales a diferencia de k-means.
+Es decir, el algoritmo k-means estructuralmente está construido alrededor del concepto de distancia de cada observación a su centroide asignado, este diseño provoca que k-means tenga tendencia a generar grupos con forma esférica colocando el centroide en el centro.
+
+Veremos que su parámetro de entrada más relevante es *minPts* que define la mínima densidad aceptada alrededor de un centroide.
+Incrementar este parámetro nos permitirá reducir el ruido (observaciones no asignadas a ningún cluster).
+
+El algoritmo **DBSCAN** (*Density-based Spatial Clustering of Applications with Noise*) requiere que se le informe de dos parámetros:
+
+-   El valor ε (**epsilon**): máximo radio de vecindad.
+    Consideraremos que dos puntos u observaciones están cercanos si la distancia que los separa es menor o igual a ε.
+
+-   El valor **minPts**: mínimo número de puntos en la ε-vecindad de un punto.
+    Podemos pensarlo como el valor que marcará nuestro criterio de qué consideramos como denso.
+
+De este modo, DBSCAN irá construyendo esferas de radio ε que al menos incluyan minPts observaciones.
+La lógica que sigue el algoritmo para construir los clústeres o zonas densamente pobladas es la siguiente:
+
+-   Se considera que un punto *p* es un **punto núcleo**, *core point*, si al menos tiene minPts puntos a una distancia menor o igual a ε.
+    Dicho de otro modo, contiene *minPts* en la ε-vecindad.
+
+-   Un punto *q* es **alcanzable** desde *p*, (*p-reachable*), donde *p* es núcleo, si la distancia entre ambos es inferior o igual a ε.
+    Dicho de otro modo, si está dentro de la ε-vecindad de *p*.
+
+-   Un punto *q* es alcanzable desde *p*, si existe un camino de puntos núcleo que los conecta.
+    Explicado más formalmente, si existe *p~1~,\...,p~n~*, con *p~1~ = p* y *p~n~ = q*, donde cada *p~i+1~* es alcanzable por *p~i~* y todos los *p~1~,\...,p~n-1~* son puntos núcleo.
+
+-   Cualquier punto no alcanzable se considerará punto extremo o outlier.
+
+La siguiente figura nos muestra de un modo esquemático, el proceso de construcción de zonas de densidad.
+En este ejemplo se toma minPts = 4.
+
+![](images/paste-8A088AAB.png)
+
+Los puntos B y C corresponden a la frontera del clúster, es decir, son puntos alcanzables desde un punto núcleo, pero ellos mismo no son punto núcleo porque no incluyen minPts en su ε-vecindario.
+Los puntos A son puntos núcleo ya que como mínimo cada uno de ellos tiene 4 puntos en un radio ε pre-fijado.
+Finalmente, el punto N se considera extremo o outlier puesto que no es alcanzable desde ningún punto del juego de datos.
+
+Por su parte, el algoritmo **OPTICS** (*Ordering Points to Identify Cluster Structure*), es un algoritmo que de algún modo generaliza DBSCAN y resuelve su principal inconveniente: los parámetros iniciales.
+
+OPTICS requiere un radio ε y un criterio de densidad *minPts* igual que DBSCAN, pero en el caso de OPTICS el valor de radio ε no determinará la formación de clústeres sino que servirá para ayudar a reducir la complejidad de cálculo en el propio algoritmo.
+En realidad OPTICS no es un algoritmo que genere una propuesta de clústeres a partir de un juego de datos de entrada, como DBSCAN.
+De hecho, lo que hace es ordenar los puntos del juego de datos en función de su distancia de alcanzabilidad, o ***reachability distance***, en inglés.
+Para entender bien este concepto nuevo, nos basaremos en la siguiente figura, donde hemos tomado *minPts* = 5.
+
+![](images/paste-B8DED8D5.png)
+
+La ***core-distance*** del punto p es el radio ε' mínimo tal que su ε′-vecindad contiene al menos minPts = 5 puntos.
+La ***reachability-distance*** de un punto q respecto de un punto núcleo (corepoint) p será la mayor de las dos distancias siguientes:
+
+-   *core-distance* del punto p,
+
+-   distancia euclidiana entre los puntos p y q, que denotaremos por *d(p,q).*
+
+Siguiendo con el ejemplo de la figura anterior, vemos cómo la *reachability-distance* de los puntos *p* y *q~1~* es la *core-distance* del punto *p*, porque esta es mayor que la distancia euclidiana entre los puntos *p* y *q*.
+Por otro lado, la *reachability-distance* de los puntos p y q~2~ es la distancia euclidiana entre ellos, porque esta es mayor que la *core-distance* del punto p.  OPTICS como algoritmo lo que nos va a hacer es asignar a cada punto del juego de datos una *reachability-distance*.
+Aclarados estos conceptos básicos, podemos avanzar en la comprensión de la utilidad de disponer de dicha ordenación.
+Para ello usaremos un tipo de gráfico específico para este algoritmo, el *reachability plot*.
+Para entender bien qué es un *reachability plot* veamos la siguiente figura.
+En el gráfico inferior vemos la *reachability-distance* asignada a cada punto y apreciamos como hay zonas con valores altos que se corresponden con los puntos *outliers* y zonas con valores muy bajos que se corresponden con puntos ubicados en zonas densas.
+
+![](images/paste-20DFB1AB.png)
+
+Fijémonos que a la hora de generar los clústeres podremos decidir cuál es la *reachability-distance* límite que nos marca qué consideramos como clúster.
+Podremos calibrar o ajustar este valor límite hasta conseguir una generación de clústeres adecuada.
+La posibilidad de calibrar la *reachability-distance* límite, hace que OPTICS en realidad lo que nos dé es una ordenación de puntos por *reachability-distance* y en consecuencia será el propio analista quien podrá generar múltiples combinaciones de clústeres en función del límite que se quiera fijar.
+Una de las primeras actividades que realiza el algoritmo es **ordenar las observaciones** de forma que los puntos más cercanos se conviertan en vecinos en el ordenamiento.
+Se podría pensar como una representación numérica del dendograma de una agrupación jerárquica.
+
+```{r}
+# Añadimos la librería 'dbscan'
+if (!require('dbscan')) install.packages('dbscan'); library(dbscan)
+
+# Recuperamos los datos preprocesados
+data <- dataAux
+
+# Eliminamos valores nulos que hayan podido quedar tras el preprocesado
+data <- na.omit(data)
+
+# Ya que se trata de un modelo no supervisado, vamos a eliminar la columna de las etiquetas 'sal'
+data <- select(data, -sal)
+
+# Lanzamos el algoritmo OPTICS dejando el parámetro eps con su valor por defecto y fijando el criterio de vecindad en 10
+res <- optics(data, minPts = 10)
+res
+```
+
+```{r}
+# Obtenemos la ordenación de las observaciones o puntos
+res$order
+```
+
+Otro paso muy interesante del algoritmo es la generación de un **diagrama de alcanzabilidad** o *reachability plot,* en el que se aprecia de una forma visual la distancia de alcanzabilidad de cada punto.
+
+Los valles representan clusters (cuanto más profundo es el valle, más denso es el cluster), mientras que las cimas indican los puntos que están entre las agrupaciones (estos puntos son cadidatos a ser considerados *outliers*)
+
+```{r}
+# Gráfica de alcanzabilidad
+plot(res)
+```
+
+Veamos otra representación del diagrama de alcanzabilidad, donde podemos observar las trazas de las distancias entre puntos cercanos del mismo cluster y entre clusters distintos.
+Por simplificidad, vamos a visualizar solo algunas de las trazas:
+
+```{r}
+# Dibujo de las trazas que relacionan puntos
+# Longitude y Latitude
+plot(data[c(1,2)], col = "grey")
+polygon(data[c(1,2)][res$order,])
+
+# minExp y maxExp
+plot(data[c(3,4)], col = "grey")
+polygon(data[c(3,4)][res$order,])
+
+# numeric.Job.Title y numeric.Key.Skills
+plot(data[c(5,6)], col = "grey")
+polygon(data[c(5,6)][res$order,])
+
+# numeric.Role.Category y numeric.Location
+plot(data[c(7,8)], col = "grey")
+polygon(data[c(7,8)][res$order,])
+
+# numeric.Functional.Area y numeric.Industry
+plot(data[c(9,10)], col = "grey")
+polygon(data[c(9,10)][res$order,])
+
+# numeric.Role y Longitude
+plot(data[c(11,1)], col = "grey")
+polygon(data[c(11,1)][res$order,])
+```
+
+Otro ejercicio interesante a realizar es extraer una agrupación de la ordenación realizada por OPTICS similar a lo que DBSCAN hubiera generado estableciendo el parámetro eps en eps_cl = 0.065.
+Se puede utilizar el algoritmo OPTICS como una forma de preprocesar los datos antes de aplicar DBSCAN.
+El algoritmo OPTICS puede proporcionar una representación jerárquica de los datos que permite determinar automáticamente los valores óptimos de los parámetros de DBSCAN (eps y min_samples) y puede ser útil para manejar conjuntos de datos con varias escalas de densidad.
+
+```{r}
+### Extracción de un clustering DBSCAN cortando la alcanzabilidad en el valor eps_cl
+res <- extractDBSCAN(res, eps_cl = .065)
+res
+```
+
+```{r}
+plot(res) ## negro indica ruido
+```
+
+En este caso, se ve la gráfica de alcanzabilidad completamente negra.
+Esto se debe a que el valor de eps_cl no es lo suficientemente grande y por tanto no se alcanzan minPts vecinos dentro del radio definido por eps_cl, definiendo todos los puntos como ruido.
+
+A continuación, mediante la función ***hullplot()*** vamos a visualizar los resultados del agrupamiento.
+Esta función dibuja un gráfico de cajas que representa los diferentes niveles jerárquicos del agrupamiento.
+Cada caja representa un cluster y su tamaño se relaciona con el número de puntos de datos en ese cluster.
+Los clusters se conectan mediante líneas que representan las relaciones jerárquicas entre ellos.
+Esto nos visualizar de manera gráfica cómo los puntos de datos están agrupados en diferentes niveles jerárquicos y cómo estos clusters están relacionados entre sí.
+
+```{r}
+hullplot(data, res)
+```
+
+Como se puede apreciar, no se ha detectado ningún cluster.
+
+### 3.2 Se prueban, describen e interpretan los resultados con diferentes valores de eps.
+
+Repetimos el experimento anterior aumentando el valor de eps_cl, aumentando así el radio en el que se acepte un vecino, permitiendo que sea más factible alcanzar mintPts vecinos.
+
+```{r}
+### Incrementamos el parámetro eps
+res <- extractDBSCAN(res, eps_cl = 50)
+res
+plot(res)
+hullplot(data, res)
+```
+
+En este caso ya se logran generar algunos clústeres, aunque sigue habiendo mucho ruido debido a que eps_cl sigue sin ser lo suficientemente grande.
+
+A continuación, calculamos el valor promedio de la silueta para cuantificar la calidad del agrupamiento.
+
+```{r}
+# Calculo disimilaridad de los datos
+d <- daisy(data)
+
+sk <- silhouette(res$cluster, d)
+print(mean(sk[,3]))
+```
+
+Como cabía esperar, obtenemos un valor muy bajo.
+Esto se debe a que, a pesar de que los puntos de un clúster están muy cercanos entre sí, hay muchos puntos clasificados como ruido, pero que siguen estando muy cerca de algún clúster, teniendo puntos en el clúster vecino muy cercanos, y reduciendo así la calidad del agrupamiento.
+
+Por tanto volvemos a repetir con un valor de eps_cl aún mayor:
+
+```{r}
+resultados <- rep(0, 45)
+eps = seq(50,95,by=1)
+
+for (i in 1:45)
+{
+  res <- extractDBSCAN(res, eps_cl = eps[i])
+  d <- daisy(data)
+  sk <- silhouette(res$cluster, d)
+  resultados[i] <- mean(sk[,3])
+}
+
+# Muestro la evolución del valor promedio de la silueta
+plot(51:95,resultados,type="o",col="blue",pch=0,xlab="Número de clusters",ylab="silhouette")
+```
+
+A pesar de ver que el valor promedio de la silueta sigue aumentando a medida que aumenta el valor de épsilon, llega un momento en el que no se puede aumentar más porque agrupa a todos los puntos en un único clúster.
+Vamos a analizar qué sucede en el caso de eps=95.
+
+```{r}
+### Incrementamos el parámetro eps
+res <- extractDBSCAN(res, eps_cl = 95)
+res
+plot(res)
+hullplot(data, res)
+```
+
+Observamos en los gráficos anteriores como se ha coloreado un único cluster y en negro se mantienen los valores *outliers* o extremos.
+
+Volvemos a calcular el valor promedio de la silueta para cuantificar la calidad de este nuevo agrupamiento.
+
+```{r}
+# Calculo disimilaridad de los datos
+d <- daisy(data)
+
+sk <- silhouette(res$cluster, d)
+print(mean(sk[,3]))
+```
+
+Vemos que el resultado sigue siendo bastante malo, ya que los puntos son muy homogéneos y no se aprecian grupos.
+Aunque el ruido prácticamente ha desaparecido, como no hay grupos claramente espaciados, se forma un único clúster demasiado grande, lo cual hace que baje también la calidad del modelo, dando lugar a un valor de silueta bajo ya que la distancia entre puntos de un mismo cluster se eleva.
+
+```{r}
+table(res$cluster)
+```
+
+Mediante la función ***table()***, utilizada para contar la frecuencia de cada valor de un vector, observamos que hay 3 puntos sin clasificar (cluster 0) y 470 en el cluster 1.
+
+Para poder profundizar más en este algoritmo, vamos a buscar el mejor valor de épsilon que genere al menos 2 clústeres:
+
+```{r}
+resultados <- rep(0, 45)
+colores <- rep(0, 45)
+eps = seq(50,95,by=1)
+max_val <- c(-1,-1) # pareja épsilon - silueta
+for (i in 1:45)
+{
+  res <- extractDBSCAN(res, eps_cl = eps[i])
+  d <- daisy(data)
+  sk <- silhouette(res$cluster, d)
+  resultados[i] <- mean(sk[,3])
+  
+  # Si tiene 2 o más clústers
+  if (max(res$cluster >= 2)){
+    # Punto de color verde
+    colores[i] <- "green"
+    
+    # Compruebo que mejora al mejor valor de epsilon hasta el momento
+    if (mean(sk[,3]) > max_val[2]){
+      # Pinto de verde el antiguo mejor
+      colores[max_val[1]] <- "green"
+      
+      # Reemplazo el mejor
+      max_val <- c(i, mean(sk[,3]))
+      
+      # El mejor lo pinto de azul
+      colores[i] <- "blue"
+    }
+  } 
+  # Si no
+  else{
+    # Punto de color rojo
+    colores[i] <- "red"
+  }
+}
+
+# Pinto el primer punto de negro para que las líneas sean de color negro
+colores[1] <- "black"
+
+# Muestro la evolución del valor promedio de la silueta
+plot(51:95,resultados,type="o",col=colores,pch=0,xlab="Número de clusters",ylab="silhouette")
+
+# "bottomright" es la posición donde se mostrará la leyenda, 
+# "legend" es el vector de etiquetas de cada clúster
+# "col" es el vector de colores correspondientes a cada etiqueta
+# "pch" es el estilo de marcador.
+legend("bottomright", legend = c("2 o más clústers", "1 único clúster", "Mejor eps"), col = c("green","red", "blue"), pch=16)
+
+# Reemplazo el índice de la posición del mejor épsilon en el vector eps por su valor
+max_val[1] <- eps[max_val[1]]
+
+# Muestro el valor óptimo de épsilon para 2 o más clústers y su valor promedio de silueta
+print(max_val)
+```
+
+Vemos que el mejor valor entero posible de épsilon es **78**, el cual da como resultado un valor promedio de silueta de **0.09965908**.
+Ahora profundizaremos en ello.
+Además, apreciamos que para valores de épsilon superiores a 80, se alcanza un agrupamiento con un único clúster.
+
+```{r}
+res <- extractDBSCAN(res, eps_cl = 78)
+res
+plot(res)
+hullplot(data, res)
+```
+
+Vemos que 44 puntos han sido clasificados como ruido, mientras que el resto se reparten en 2 clústers, 417 en el clúster 1, y 12 en el clúster 2.
+
+### 3.3 Se obtiene una medida de lo bueno que es el agrupamiento.
+
+A continuación, comparamos las agrupaciones obtenidas con la clasificación real.
+Al igual que en ejercicios anteriores, vamos a calcular la exactitud del modelo, en este caso.
+Para ello, debemos discretizar la variable "sal" en dos rangos de salario y asignamos cada clúster a un rango de salario.
+
+En este caso, no vamos a separar los datos en dos grupos de mismo tamaño, sino que haremos un grupo de 417 puntos, y otro de 12.
+
+En primer lugar agruparemos los 12 registros con menos salario y los otros 417, y posteriormente lo haremos al revés, separando los 12 registros con más salario por un lado y el resto por otro, para ver cual de las dos agrupaciones se ajusta mejor a la clusterización realizada por el modelo.
+
+```{r}
+# Recupero la variable "sal" de cada registro
+data$sal <- na.omit(dataAux)$sal
+
+# Añado la columna cluster y elimino los registros clasificados como ruido
+data$cluster <- res$cluster
+data <- filter(data, cluster != 0)
+
+# Ordeno ascendentemente en función de "sal"
+data <- data[order(data$sal),]
+
+# Muestro el valor de corte de los rangos
+print(data[12,"sal"])
+```
+
+Una vez ordenados los registros, veo que el valor de la fila 12 que marca el límite de los rangos es 1586, por lo tanto, discretizo la variable en dos rangos: [0-1586] y \>1586:
+
+```{r}
+# Asigno en cluster 1 a los 12 primeros, y el cluster 2 a los restantes
+data$sal2clusters <- as.factor(c(rep("0-1586",12),rep(">1586",nrow(data)-12)))
+```
+
+Asignar el cluster 2 al rango [0-1586] y el cluster 1 al rango \>1586.
+
+```{r}
+# Asigna el cluster 1 al rango "0-1586" y el cluster 2 al rango ">1586"
+data$predictions <- as.factor(
+  ifelse(data$cluster == 2, "0-1586",
+         ifelse(data$cluster == 1, ">1586","NA")))
+
+head(data)
+```
+
+Finalmente, calculamos el porcentaje de aciertos.
+
+```{r}
+exactitud <- sum(data$sal2clusters == data$predictions)/nrow(data)
+print(exactitud)
+```
+
+Con esta división, el modelo clasifica correctamente únicamente el 94,4% de los datos, un resultado, a priori, bastante bueno.
+Para verificar la calidad del modelo, vamos a calcular otras métricas.
+Dado que se trata de un problema binario, podemos utilizar métricas como sensibilidad, precision y F-measure.
+Para ello, cabe destacar los siguientes conceptos:
+
+-   **Verdaderos Positivos** (TP - True Positive): puntos clasificados como positivos que son.
+
+-   **Falsos Positivos** (FP - False Positive): puntos clasificados como que son negativos.
+
+-   **Verdaderos Negativos** (TN - True Negative): puntos clasificados como negativos que son negativos.
+
+-   **Falsos Negativos** (FN - False Negative): puntos clasificados como negativos que son positivos.
+
+-   **Sensibilidad**: También se conoce como Tasa de Verdaderos Positivos (True Positive Rate) ó recall.
+    Es la proporción de casos positivos que fueron correctamente identificados por el algoritmo.
+    Se calcula como: $\frac{TP}{TP+FN}$.
+
+-   **Precisión**: También llamada valor de la predicción positiva, se refiere a la dispersión del conjunto de valores obtenidos a partir de mediciones repetidas de una magnitud.
+    Cuanto menor es la dispersión mayor la precisión.
+    Se representa por la proporción de verdaderos positivos dividido entre todos los resultados positivos: $\frac{TP}{TP+FP}$.
+
+-   **especificidad**: También conocida como tasa de verdaderos negativos, se refiere a cuántas veces el modelo clasificó correctamente a una clase específica cuando esa clase no estaba presente.
+    Se calcula como: $\frac{TN}{TN+FP}$
+
+-   **F-measure**: Combina la precisión y sensibilidad en una sola métrica.
+    Se calcula como: $2 * \frac{Precision * Sensibilidad}{Precision + Sensibilidad}$
+
+En este caso, definimos positivo como "\>1586" (el criterio es que son la mayoría de registros) y negativo como "0-1586).
+
+```{r}
+# Calcular TP, FP, TN y FN
+# Para ello filtro la tabla por los valores explicados 
+# anteriormente y almaceno el número de filas resultante
+TP <- nrow(filter(data, predictions==">1586" & sal2clusters==">1586"))
+FP <- nrow(filter(data, predictions==">1586" & sal2clusters=="0-1586"))
+TN <- nrow(filter(data, predictions=="0-1586" & sal2clusters=="0-1586"))
+FN <- nrow(filter(data, predictions=="0-1586" & sal2clusters==">1586"))
+
+# Meto todas las métricas en una tabla
+metrics <- data.frame(TP=TP, FP=FP, TN=TN, FN=FN)
+
+# Calcular sensibilidad, precisión y especificidad
+metrics$sensibilidad <- c(TP/(TP+FN))
+metrics$precision <- c(TP/(TP+FP))
+metrics$especificidad <- c(TN/(TN+FP))
+metrics$f_measure <- c(2*(metrics$precision*metrics$sensibilidad)/(metrics$precision+metrics$sensibilidad))
+metrics$exactitud <- c(mean(data$predictions == data$sal2clusters))
+
+print(metrics)
+```
+
+Como era de esperar, el algoritmo es bueno detecando valores en el rango \>1586 (97,12% de sensibilidad y precisión), pero muy malo para detectar valores en el rango [0-1586] (0% de especificidad).
+No obstante, el modelo logra un buen resultado en general (97,12% de f-measure y 94,4% de exactitud), ya que la mayoría de registros en el juego de datos se encuentran en el rango \>1586, aunque **esto no implica que el modelo sea bueno**, ya que si se reciben datos de entrada que deban ser clasificados en el rango [0,1586], estos serán mal clasificados con una alta probabilidad.
+
+A continuación, repetimos este proceso, pero agrupando por un lado los 12 registros con mayor salario en un clúster, y el resto en otro clúster.
+
+```{r}
+# Ordeno descendentemente en función de "sal"
+data <- data[order(data$sal,decreasing=TRUE),]
+# Muestro el valor de corte de los rangos
+print(data[12,"sal"])
+```
+
+En esta ocasión, una vez ordenados los registros, vemos que el valor de la fila 12 que marca el límite de los rangos es 6744, por lo tanto, discretizo la variable en dos rangos: \>6744 y [0-6744]:
+
+```{r}
+# Asigno en cluster 1 a los 12 primeros, y el cluster 2 a los restantes
+data$sal2clusters <- as.factor(c(rep(">6744",12),rep("0-6744",nrow(data)-12)))
+```
+
+Asignar el cluster 1 al rango \>6744 y el cluster 2 al rango [0-6744].
+
+```{r}
+# Asigna el cluster 2 al rango ">6744" y el cluster 1 al rango "0-6744"
+data$predictions <- as.factor(
+  ifelse(data$cluster == 2, ">6744",
+         ifelse(data$cluster == 1, "0-6744","NA")))
+```
+
+Finalmente, calculamos el porcentaje de aciertos.
+
+```{r}
+exactitud <- sum(data$sal2clusters == data$predictions)/nrow(data)
+print(exactitud)
+```
+
+```{r}
+# Calcular TP, FP, TN y FN
+# Para ello filtro la tabla por los valores explicados 
+# anteriormente y almaceno el número de filas resultante
+TP <- nrow(filter(data, predictions=="0-6744" & sal2clusters=="0-6744"))
+FP <- nrow(filter(data, predictions=="0-6744" & sal2clusters==">6744"))
+TN <- nrow(filter(data, predictions==">6744" & sal2clusters==">6744"))
+FN <- nrow(filter(data, predictions==">6744" & sal2clusters=="0-6744"))
+
+# Meto todas las métricas en una tabla
+metrics <- data.frame(TP=TP, FP=FP, TN=TN, FN=FN)
+
+# Calcular sensibilidad, precisión y especificidad
+metrics$sensibilidad <- c(TP/(TP+FN))
+metrics$precision <- c(TP/(TP+FP))
+metrics$especificidad <- c(TN/(TN+FP))
+metrics$f_measure <- c(2*(metrics$precision*metrics$sensibilidad)/(metrics$precision+metrics$sensibilidad))
+metrics$exactitud <- c(mean(data$predictions == data$sal2clusters))
+
+print(metrics)
+```
+
+En este caso, se obtiene el mismo resultado que en el caso anterior, seguramente porque los datos agrupados en el clúster 2 no pertenezcan a ninguno de los extremos en los rangos de salario, por lo que las conclusiones son las mismas.
+Utilizaremos la agrupación anterior ([0,1586] y \>1586) para futuros análisis.
+
+### 3.4 Se comparan los resultados obtenidos de los modelos anteriores y DBSCAN.
+
+|                  Modelo                   | **k**  |     **Exactitud**      |
+|:-----------------------------------------:|:------:|:----------------------:|
+|        k-means (dist. euclidiana)         | 3<br>4 | 0.3340381<br>0.2515856 |
+| hierarchical clustering (dist. manhattan) | 3<br>4 | 0.3636364<br>0.2854123 |
+|               OPTICS-DBSCAN               |   2    |       0.9440559        |
+
+: Resultados de los modelos
+
+Al utilizar OPTICS y DBSCAN, el modelo se ajusta mucho mejor a los datos, llegando en ocasiones a triplicar el porcentaje de datos bien agrupados.
+Estos algoritmos permiten la generacion de grupos no radiales, es decir, grupos que pueden tener formas y tamaños variados, lo cual es especialmente útil cuando los datos no se distribuyen de manera esférica, además de que son especialmente buenos identificando outliers.
+
+Los algoritmos k-means y hierarchical clustering, por otro lado, requieren que los datos se distribuyan de manera esférica y se ven afectados por la elección de los parámetros k y la distancia utilizada Tienen problemas para agrupar datos con clústeres condiferentes tamaños y densidades y los centroides se pueden arrastrar por valores atípicos, o bien los valores atípicos pueden obtener su propio clúster en lugar de ignorarlos.
+En este caso, se puede observar que el uso de OPTICS y DBSCAN resulta en una mayor exactitud en la agrupación de los datos en comparación con los otros algoritmos.
+
+Sin embargo, es importante mencionar que el algoritmo DBSCAN tiene como desventaja que requiere el ajuste de dos parámetros (eps y minPts) para su correcto funcionamiento, estos parámetros son críticos para el rendimiento del algoritmo y su correcta elección puede ser difícil en algunos casos.
+Es recomendable probar diferentes valores para estos parámetros y evaluar los resultados obtenidos para determinar los mejores ajustes.
+
+Además, es importante tener en cuenta que el rendimiento del algoritmo DBSCAN puede verse afectado por la presencia de ruido o outliers en los datos.
+Es posible que en algunos casos, los algoritmos k-means y hierarchical clustering puedan ser más robustos a estos tipos de datos.
+
+|    Modelo     | Sensibilidad | **Precision** | Especificidad | F_measure | Exactitud |
+|:-------------:|:------------:|:-------------:|:-------------:|:---------:|:---------:|
+| OPTICS-DBSCAN |   0.971223   |   0.971223    |       0       | 0.971223  | 0.9440559 |
+
+En este caso, debido a la homogeneidad de los datos, DBSCAN genera una clusterización desbalanceada, donde la mayoría de datos se agrupan en un mismo cluster.
+Por ello, los resultados presentados indican que el modelo DBSCAN tiene una alta tasa de sensibilidad y precisión para detectar valores en el rango \>1586, lo cual es esperado ya que este es el rango donde se encuentra la mayoría de los registros en el conjunto de datos.
+Sin embargo, el modelo tiene una baja tasa de especificidad para detectar valores en el rango [0-1586], lo cual sugiere que este rango de valores es donde el modelo tiene dificultades para clasificar los datos de manera precisa.
+
+A pesar de esto, el modelo logra un buen resultado en general con una f-measure del 97,12% y una exactitud del 94,4%.
+Sin embargo, es importante tener en cuenta que esto no implica necesariamente que el modelo sea bueno.
+Esto se debe a que si el modelo recibe datos de entrada que deben ser clasificados en el rango [0-1586], estos serán mal clasificados con una alta probabilidad.
+
+K-means y hierarchical clustering no tienen este problema ya que estos algoritmos generan clústers más equilibrados, aunque con menos precisión.
+
+En resumen, el modelo DBSCAN generado es bueno para detectar valores en el rango \>1586 pero tiene dificultades para detectar valores en el rango [0-1586], lo cual es crítico si se espera que el modelo clasifique datos en ambos rangos con precisión.
+los modelos k-means y hierarchical clustering generados no son tan buenos para detectar valores dentro de un rango, pero son mejores para detectar valores fuera de dicho rango y, además, al agrupar por más clústers y de intervalos parecidos, el problema de pérdida de información no es tan relevante.
+
+### 3.5 Se comentan las conclusiones.
+
+OPTICS y DBSCAN son algoritmos de clusterización no supervisada que ofrecen una gran flexibilidad en la detección de patrones y estructuras en los datos, especialmente en situaciones donde los datos no se distribuyen de manera esférica.
+Estos algoritmos son especialmente útiles para identificar clusters de formas y tamaños variables, lo que los hace ideales para aplicaciones en las que se requiere la detección de patrones complejos en los datos.
+
+Sin embargo, estos algoritmos también tienen sus limitaciones.
+En primer lugar, DBSCAN requiere el ajuste de dos parámetros críticos (eps y minPts) para su correcto funcionamiento.
+La elección incorrecta de estos parámetros puede afectar significativamente el rendimiento del algoritmo y es esencial probar diferentes valores para estos parámetros antes de tomar una decisión sobre cuáles son los mejores ajustes.
+
+En segundo lugar, es importante tener en cuenta que el rendimiento de DBSCAN puede verse afectado por la presencia de ruido u outliers en los datos.
+En estos casos, es posible que el algoritmo no sea capaz de identificar correctamente los clusters y los resultados pueden ser menos precisos.
+
+Es importante también mencionar que estos algoritmos son complementarios a otros algoritmos de clusterización como k-means y hierarchical clustering.
+Cada algoritmo tiene sus propias ventajas y limitaciones y es importante evaluar las características de los datos y los objetivos del análisis para determinar cuál es el algoritmo adecuado para utilizar en una situación específica.
+
+En resumen, OPTICS y DBSCAN son algoritmos de clusterización no supervisada que ofrecen una gran flexibilidad en la detección de patrones y estructuras en los datos.
+Sin embargo, es importante tener en cuenta las limitaciones de estos algoritmos y tomar medidas para abordarlas para obtener resultados precisos y significativos.
+Es importante también evaluar las características de los datos y los objetivos del análisis para determinar cuál es el algoritmo adecuado para utilizar en una situación específica.
+
+### 3.6 Identifica qué posibles limitaciones tienen los datos que has seleccionado para obtener conclusiones con los modelos utilizados (no supervisados).
+
+Los datos utilizados están etiquetados por una variable continua, por lo que lo ideal sería aplicar un modelo de regresión.
+A la hora de generar un modelo no supervisado, estos pueden ser de clustering o de asociación, los cuales no se ajustan bien a variables contínuas.
+
+Para poder convertir un problema de regresión en un problema de clasificación o agrupación, se puede discretizar la variable utilizada para el etiquetado, asignando los datos a distintas agrupaciones, aunque esto también puede presentar problemas como la pérdida de información, el número de valores discretos a generar y la dificultad para establecer una línea de corte adecuada para la discretización.
+En este caso, los grupos generados no quedan claramente separados en el espacio de los atributos, lo cual supone una gran dificultad para que el modelo pueda crear sus propias agrupaciones y que estas coincidan con la agrupación real a la que pertenece un dato.
+
+Si los datos no tienen una estructura clara o patrones evidentes, puede ser difícil para los modelos no supervisados aprender de ellos y generar conclusiones útiles.
+En el caso de una variable continua, puede ser difícil para los algoritmos de clustering o agrupamiento encontrar patrones significativos en los datos, ya que no hay etiquetas predefinidas para guiar la separación en grupos.
+También puede ser difícil para los algoritmos de reducción de dimensionalidad visualizar los datos de manera significativa.
+Es importante tener una comprensión previa de la estructura de los datos y utilizar técnicas adecuadas para explorarlos antes de aplicar un modelo no supervisado.
+
+Además, existe una dificultad a la hora de evaluar el rendimiento del modelo.
+Es difícil evaluar el rendimiento de un modelo no supervisado con una variable continua ya que no hay una clasificación verdadera para comparar con las predicciones.
+
+## Ejercicio 4
+
+### 4.1 Se generan reglas y se comentan e interpretan las más significativas.
+
+En este ejercicio, vamos a trabajar con árboles de decisión, un tipo de algoritmo que se utiliza con frecuencia para resolver problemas de clasificación y de regresión supervisada en minería de datos debido a su facilidad de interpretación y su buena capacidad de explicación.
+Estos modelos se pueden emplear tanto en tareas de clasificación como en problemas de regresión supervisados.
+
+Los árboles de decisión tienen como objetivo principal dividir el conjunto de datos de entrada en regiones disjuntas, de manera que todas las muestras pertenecientes a una misma región sean de la misma clase.
+Si una región incluye muestras de diferentes clases, entonces se divide en regiones más pequeñas siguiendo el mismo principio.
+Este proceso se detiene cuando se ha dividido el conjunto de datos en regiones en las que todas las muestras pertenecen a una única clase.
+Un árbol de decisión se considera completo o puro cuando es posible construir un árbol que cumple esta condición.
+
+Un árbol de decisión está compuesto por nodos terminales o hojas, que representan regiones etiquetadas según una clase, y nodos internos o de división, que representan condiciones que permiten decidir a qué subregión va cada elemento que llega a dicho nodo.
+Cuando se presenta una nueva muestra para ser evaluada por un árbol de decisión, el proceso comienza en el nodo raíz, que contiene una condición que determina por qué rama del árbol debe ir la muestra.
+Una vez seleccionada la rama, la muestra llegará a otro nodo con otra condición o a un nodo terminal, en cuyo caso se determinará la etiqueta predicha para la muestra basándose en la etiqueta indicada en el nodo terminal.
+
+Nuestro objetivo es crear un árbol de decisión que permita analizar qué salario corresponde a cada trabajador, según las condiciones estudiadas.
+Para ello, dado que se trata de un modelo supervisado, debemos dividir los datos etiquetados en conjunto de entrenamiento y de test para, posteriormente, crear el árbol de dicisión.
+
+El conjunto de entrenamiento es el subconjunto del conjunto original de datos utilizado para construir un primer modelo; y el conjunto de prueba, el subconjunto del conjunto original de datos utilizado para evaluar la calidad del modelo, lo más correcto será utilizar un conjunto de datos diferente del que utilizamos para construir el árbol, es decir, un conjunto diferente del de entrenamiento.
+
+No hay ninguna proporción fijada con respecto al número relativo de componentes de cada subconjunto, pero la más utilizada acostumbra a ser 2/3 para el conjunto de entrenamiento y 1/3, para el conjunto de prueba.
+
+La variable por la que clasificaremos es el campo "*sal*".
+De esta forma, tendremos un conjunto de datos para el entrenamiento y uno para la validación.
+
+```{r}
+# Recuperamos los datos preprocesados
+data <- dataAux
+
+# Eliminamos valores nulos que hayan podido quedar tras el preprocesado
+data <- na.omit(data)
+
+# Definimos semilla de aleatoriedad
+set.seed(1)
+
+# Separamos la etiqueta del resto de datos
+y <- data$sal
+X <- data %>% select(-sal)
+
+# Separamos los datos de entrenamiento y test de forma aleatoria
+split_prop <- 3 
+indexes = sample(1:nrow(data), size=floor(((split_prop-1)/split_prop)*nrow(data)))
+trainX<-X[indexes,]
+trainY<-y[indexes]
+testX<-X[-indexes,]
+testY<-y[-indexes]
+```
+
+Después de una extracción aleatoria de casos es altamente recomendable efectuar un análisis de datos mínimo para asegurarnos de no obtener clasificadores sesgados por los valores que contiene cada muestra.
+En este caso, verificaremos que la proporción de datos en cada grupo es más o menos contante en ambos conjuntos:
+
+```{r}
+summary(trainX)
+```
+
+```{r}
+summary(trainY)
+```
+
+```{r}
+summary(testX)
+```
+
+```{r}
+summary(testY)
+```
+
+Verificamos que no haya diferencias graves que puedan sesgar las conclusiones.
+Vemos que los valores máximos y mínimos así como el valor promedio, la mediana y los cuartiles son similares en ambos conjuntos de datos.
+
+A continuación, se crea el árbol de decisión usando los datos de entrenamiento (no hay que olvidar que la variable outcome es de tipo factor).
+
+```{r}
+trainY <-  as.factor(trainY)
+model <- C50::C5.0(trainX, trainY, rules=TRUE)
+summary(model)
+```
+
+Errors muestra el número y porcentaje de casos mal clasificados en el subconjunto de entrenamiento.
+El árbol obtenido clasifica erróneamente 200 de los 315 datos de entrenamiento, una tasa de error del 63,5%.
+
+Este resultado tan malo se debe a la alta complejidad de este problema de regresión.
+Para solventar esto, vamos a simplificar el problema convirtiéndolo en un problema de clasificiación discretizando la variable objetivo, con los pros y contras que ello conlleva, y que se han mencionado anteriormente.
+
+En este caso, vamos a utilizar la discretización en 4 grupos del mismo tamaño, evitando perder la mayor cantidad de información posible, sin aumentar demasiado la complejidad del modelo.
+
+```{r}
+# Reemplazamos la variable objetivo por su valor discretizado
+data$sal <- sal3clusters
+
+# Definimos semilla de aleatoriedad
+set.seed(284)
+
+# Separamos la etiqueta del resto de datos
+y <- data$sal
+X <- data %>% select(-sal)
+
+# Separamos los datos de entrenamiento y test de forma aleatoria
+split_prop <- 3 
+indexes = sample(1:nrow(data), size=floor(((split_prop-1)/split_prop)*nrow(data)))
+trainX<-X[indexes,]
+trainY<-y[indexes]
+testX<-X[-indexes,]
+testY<-y[-indexes]
+```
+
+Verificaremos que la proporción de datos en cada grupo es más o menos contante en ambos conjuntos:
+
+```{r}
+summary(trainX)
+```
+
+```{r}
+summary(trainY)
+```
+
+```{r}
+summary(testX)
+```
+
+```{r}
+summary(testY)
+```
+
+Vemos fácilmente que no hay diferencias graves que puedan sesgar las conclusiones.
+
+Creamos el nuevo árbol de decisión:
+
+```{r}
+trainY <- as.factor(trainY)
+model <- C50::C5.0(trainX, trainY,rules=TRUE)
+summary(model)
+```
+
+Discretizando la variable objetivo logramos reducir el número de errores a 111 de los 315 datos de entrenamiento, una tasa de error del 35.2%, además de obtener un árbol bastante más sencillo.
+Aunque no es un resultado presumiblemente bueno, debido a la homogeneidad de los datos mencionada anteriormente, sí que mejora bastante a lo obtenido hasta ahora.
+
+### 4.2 Extraemos las reglas del modelo en formato texto y gráfico.
+
+```{r}
+model <- C50::C5.0(trainX, trainY)
+plot(model,gp = gpar(fontsize = 3.5))
+```
+
+Como podemos ver, el árbol es demasiado grande para poder visualizarlo con claridad.
+Por lo tanto, voy a exportar este plot a una imagen *"decision_tree.png"* que será incluida en la entrega:
+
+```{r}
+png("decision_tree.png", res=80, height=1200, width=2800) 
+   plot(model,gp = gpar(fontsize = 10)) 
+dev.off()
+```
+
+A partir del árbol creado, resulta sencillo extraer un conjunto de reglas que ayudan a entender el problema de clasificación.
+Las reglas podrían resumirse en que se pertenecerá a un rango de salario en función de las siguientes condiciones:
+
+1.  Los empleos con longitud de localización ≤77.02225, al menos un año de experiencia mínima, con identificador de título de trabajo \>349, identificador de habilidades \>231, identificador de categoría del rol e identificador del área funcional \>14, tendrán un salario en el rango **[0, 2864]** con un **90%** de probabilidad.
+
+2.  Los empleos con una latitud de localización ≤ 28.46707, una experiencia máxima de no más de 6 años, un identificador de título de trabajo ≤ 349, un identificador del área funcional \>2, un identificador de industria en el rango (43,46] tendrán un salario en el rango **[0, 2864]** con un **87.5%** de probabilidad.
+
+3.  Los empleos con una longitud de localización ≤77.33275, una latitud de localización ≤28.57153, al menos 7 años de experiencia mínima, un identificador de título de trabajo ≤318, e identificador de categoría del rol ≤51 tendrán un salario en el rango **[0, 2864]** con un **87.5%** de probabilidad.
+
+4.  Los empleos con un identificador de título de trabajo \>349, un identificador del área funcional ≤9, e identificador de industria ≤46 tendrán un salario en el rango **[0, 2864]** con un **83.3%** de probabilidad.
+
+5.  Los empleos con una latitud de localización ≤28.57153 tendrán un salario en el rango **[0, 2864]** con un **27.1%** de probabilidad.
+
+6.  Los empleos con una experiencia de entre 6 y 7 años, un identificador de título de trabajo ≤174, un identificador de habilidades ≤297, e identificador de categoría del rol ≤51 tendrán un salario en el rango **[2865, 4213]** con un **88.9%** de probabilidad.
+
+7.  Los empleos con una experiencia mínima ≤7 años, una experiencia máxima \>7 años, un identificador de título de trabajo \>159, e identificador de localización \>84 tendrán un salario en el rango **[2865, 4213]** con un **85.7%** de probabilidad.
+
+8.  Los empleos con una experiencia máxima ≤6 años, un identificador de título de trabajo \>312 y ≤349 tendrán un salario en el rango **[2865, 4213]** con un **77.8%** de probabilidad.
+
+9.  Los empleos con una experiencia mínima de al menos un año, un identificador del área funcional ≤2, e identificador de industria \>28 tendrán un salario en el rango **[2865, 4213]** con un **71.4%** de probabilidad.
+
+10. Los empleos con una experiencia máxima ≤6 años, un identificador de categoría del rol \>10 y ≤51, un identificador del área funcional ≤31, e identificador de industria ≤28 tendrán un salario en el rango **[2865, 4213]** con un **64.7%** de probabilidad.
+
+11. Los empleos con una latitud de localización \>28.57153, un identificador de título de trabajo ≤349, e identificador de categoría del rol ≤51 tendrán un salario en el rango **[2865, 4213]** con un **61.9%** de probabilidad.
+
+12. Los empleos con un identificador del área funcional ≤15 tendrán un salario en el rango **[2865, 4213]** con un **32.4%** de probabilidad.
+
+13. Los empleos con una experiencia máxima ≤3 años, un identificador de título de trabajo \>349, un identificador de categoría del rol ≤51, un identificador del área funcional \>14, e identificador de industria \>28 tendrán un salario en el rango **[4214, 5623]** con un **87.5%** de probabilidad.
+
+14. Los empleos con una longitud de localización ≤76.13065, un identificador de habilidades \>402, un identificador de categoría del rol \>51, e identificador del área funcional \>15 tendrán un salario en el rango **[4214, 5623]** con un **83.3%** de probabilidad.
+
+15. Los empleos con una latitud de localización ≤28.57153, una experiencia máxima \>7 años y ≤9, e identificador de industria ≤10 tendrán un salario en el rango **[4214, 5623]** con un **80%** de probabilidad.
+
+16. Los empleos con una longitud de localización \>77.33275, una experiencia mínima \>7 años, un identificador de habilidades ≤391, e identificador de localización \>54 tendrán un salario en el rango **[4214, 5623]** con un **80%** de probabilidad.
+
+17. Los empleos con una latitud de localización \>28.46707 y ≤28.57153, una experiencia máxima ≤6 años, e identificador de rol \>102 tendrán un salario en el rango **[4214, 5623]** con un **77.8%** de probabilidad.
+
+18. Los empleos con una longitud de localización \>77.02225, una experiencia mínima \>1 año, un identificador de título de trabajo \>349, un identificador de categoría del rol ≤51, un identificador del área funcional \>14, e identificador de industria \>28 tendrán un salario en el rango **[4214, 5623]** con un **63%** de probabilidad.
+
+19. Los empleos con una experiencia máxima \>6 años y ≤7, e identificador de localización \>84 tendrán un salario en el rango **[4214, 5623]** con un **57.1%** de probabilidad.
+
+20. Los empleos con una longitud de localización ≤72.9249, una experiencia máxima ≤6 años, un identificador de título de trabajo ≤312, un identificador del área funcional \>2, e identificador de industria \>28 tendrán un salario **\>5623** con un **81.8%** de probabilidad.
+
+21. Los empleos con una latitud de localización \>28.57153, un identificador de título de trabajo ≤349, un identificador de habilidades \>394 y ≤459 tendrán un salario **\>5623** con un **80%** de probabilidad.
+
+22. Los empleos con un identificador de título de trabajo \>139, un identificador de habilidades ≤402, un identificador de categoría del rol \>51, e identificador del área funcional \>18 tendrán un salario **\>5623** con un **72%** de probabilidad.
+
+23. Los empleos con una experiencia máxima ≤5 años, un identificador de habilidades ≤85, e identificador de categoría del rol \>32 tendrán un salario **\>5623** con un **52.4%** de probabilidad.
+
+24. Los empleos con un identificador de industria \>13 y ≤28 tendrán un salario **\>5623** con un **39.6%** de probabilidad.
+
+25. Los empleos leados con una experiencia máxima \>7 años y ≤9 tendrán un salario **\>5623** con un **38.5%** de probabilidad.
+
+El atributo más relevante en este árbol es la latitud debido a que, como se apreció en el análisis de variables, existe una alta concentración de registros en la India.
+
+### 4.3 Adicionalmente se genera matriz de confusión para medir la capacidad predictiva del algoritmo.
+
+A continuación, vamos a medir la calidad del modelo
+
+[Explicar matriz de confusion - table() permite varias clases]
+
+```{r}
+# Predice las clases en el conjunto de test
+predictions <- predict(model, testX)
+conf_matrix <- table(predictions, testY)
+conf_matrix
+```
+
+A partir de esta matriz de confusión, podemos calcular las métricas definidad en ejercicios anteriores.
+Para ello, debemos plantear tres situaciones distintas, en las que, en cada una de ellas, los datos positivos son una clase distinta, y los negativos son el resto de clases.
+Por ejemplo, para el caso de considerar como positiva la clase "0-3251", los TP, FP, TN y FN serán los siguientes:
+
+![](images/paste-F627CFB4.png)
+
+A continuación, medimos la calidad del modelo para cada caso, así como la exactitud del modelo, medida como el porcentaje de datos bien clasificados (total de TP entre total de datos).
+
+```{r}
+metrics <- data.frame("class"=as.factor(c("0-3251","3252-5164",">5164")))
+
+metrics$TP <- rep(0, times=3)
+metrics$FP <- rep(0, times=3)
+metrics$FN <- rep(0, times=3)
+metrics$TN <- rep(0, times=3)
+metrics$sensibilidad <- rep(0, times=3)
+metrics$precision <- rep(0, times=3)
+metrics$especificidad <- rep(0, times=3)
+metrics$f_measure <- rep(0, times=3)
+
+for(i in 1:nrow(conf_matrix)){
+  TP <- conf_matrix[i, i]
+  FP <- sum(conf_matrix[i,]) - TP
+  
+  FN <- sum(conf_matrix[,i]) - TP
+  TN <- sum(conf_matrix) - (TP+FP+FN)
+  
+  metrics$TP[i] <- TP
+  metrics$FP[i] <- FP
+  metrics$FN[i] <- FN
+  metrics$TN[i] <- TN
+  metrics$sensibilidad[i] <- TP/(TP+FN)
+  metrics$precision[i] <- c(TP/(TP+FP))
+  metrics$especificidad[i] <- c(TN/(TN+FP))
+  metrics$f_measure[i] <- c(2*(metrics$precision[i]*metrics$sensibilidad[i])/(metrics$precision[i]+metrics$sensibilidad[i]))
+}
+print(metrics)
+
+exactitud <- c(sum(metrics$TP)/sum(conf_matrix))
+print(exactitud)
+```
+
+Vemos que el modelo, en términos generales, clasifica correctamente el 33,54% de los datos (exactitud), lo cual sigue siendo un resultado bastante pobre.
+
+En cuanto a su eficiencia para detectar cada clase, vemos que el modelo tiende a clasificar los datos en el grupo "\>5164".
+Esto puede deberse a que esta clase es algo más representativa a las otras dos en el conjunto de datos de entrenamiento.
+Por ello, tanto el número de TP como el de FP es mayor en esta clase, y el número de FN y de TN es menor y, por tanto, tiene una mayor sensibilidad y una menor precisión.
+
+Por su parte, para los grupos "0-3251" y "3252-5164", el modelo es más pesimista, y tiende a clasificar los puntos como negativos, por lo que el número de TN y FN aumenta, mientras que el de TP y FP disminuye, haciendo que la sensibilidad y especificidad del modelo en esos casos disminuya y aumente, respectivamente, en comparación al grupo "\>5164".
+
+Además, el modelo tiene una mayor precisión en el caso del grupo "3252-5164", ya que este es el más representativo en el conjunto de datos de validación.
+
+En cuanto al valor de f-measure, vemos que el grupo "\>5164" tiene un mejor equilibrio entre positivos y negativos, debido a que tiene una mayor sensibilidad y una precisión moderada respecto a los otros.
+
+En general, los valores son bastante bajos en los tres casos, indicando que el modelo tiene dificultades para clasificar correctamente tanto los casos positivos como los negativos y requiere de ajustes adicionales o de un mejor preprocesado de los datos para mejorar su rendimiento.
+
+### 4.4 Se comparan e interpretan los resultados (sin y con opciones de poda o boosting), explicando las ventajas e inconvenientes del modelo generado respecto a otro método de construcción.
+
+La poda y el boosting son dos técnicas populares para mejorar el rendimiento de los árboles de decisión.
+
+La **poda** se refiere al proceso de eliminar ramas no importantes del árbol para **evitar el sobreajuste**.
+El objetivo de la poda es mejorar la precisión generalizada del árbol al reducir su complejidad.
+
+Por otro lado, el **boosting** es un enfoque de ensamblado que combina varios árboles de decisión débiles para crear un árbol de decisión más fuerte.
+El objetivo del boosting es **mejorar la precisión** del árbol mediante la combinación de varios modelos débiles.
+El resultado final es un modelo que combina varios árboles de decisión débiles para crear uno más preciso.
+
+Sin embargo, es importante tener en cuenta que tanto la poda como el boosting tienen sus **limitaciones**.
+La poda puede conducir a una **pérdida de información** y un **rendimiento menor** si se podan demasiadas ramas importantes.
+Por otro lado, el boosting puede ser sensible a los **datos ruidosos** y puede requerir un **gran número de árboles** para obtener un rendimiento adecuado.
+
+Para solucionar estas limitaciones, es importante realizar una evaluación cuidadosa del modelo y ajustar los parámetros según sea necesario.
+Por ejemplo, se pueden probar **diferentes límites de complejidad** en la poda para encontrar el mejor equilibrio entre precisión y complejidad.
+Además, se pueden utilizar técnicas como la **validación cruzada** para evaluar el rendimiento del modelo y detectar posibles problemas de sobreajuste.
+
+```{r}
+pruned_model <- C50::C5.0(trainX, trainY,rules=TRUE, trials=5) 
+summary(pruned_model)
+```
+
+```{r}
+# Predice las clases en el conjunto de test
+predictions <- predict(pruned_model, testX)
+conf_matrix <- table(predictions, testY)
+conf_matrix
+```
+
+```{r}
+metrics <- data.frame("class"=as.factor(c("0-3251","3252-5164",">5164")))
+
+metrics$TP <- rep(0, times=3)
+metrics$FP <- rep(0, times=3)
+metrics$FN <- rep(0, times=3)
+metrics$TN <- rep(0, times=3)
+metrics$sensibilidad <- rep(0, times=3)
+metrics$precision <- rep(0, times=3)
+metrics$especificidad <- rep(0, times=3)
+metrics$f_measure <- rep(0, times=3)
+
+for(i in 1:nrow(conf_matrix)){
+  TP <- conf_matrix[i, i]
+  FP <- sum(conf_matrix[i,]) - TP
+  
+  FN <- sum(conf_matrix[,i]) - TP
+  TN <- sum(conf_matrix) - (TP+FP+FN)
+  
+  metrics$TP[i] <- TP
+  metrics$FP[i] <- FP
+  metrics$FN[i] <- FN
+  metrics$TN[i] <- TN
+  metrics$sensibilidad[i] <- TP/(TP+FN)
+  metrics$precision[i] <- c(TP/(TP+FP))
+  metrics$especificidad[i] <- c(TN/(TN+FP))
+  metrics$f_measure[i] <- c(2*(metrics$precision[i]*metrics$sensibilidad[i])/(metrics$precision[i]+metrics$sensibilidad[i]))
+}
+print(metrics)
+```
+
+```{r}
+exactitud <- c(sum(metrics$TP)/sum(conf_matrix))
+print(exactitud)
+```
+
+Como era de esperar, el resultado de las predicciones es algo peor, aunque el modelo es bastante menos complejo.
+
+En comparación con el modelo de árbol sin poda, el modelo con poda tiene una mayor sensibilidad para el grupo "\>5164", lo que significa que tiene una mayor capacidad para detectar casos verdaderos.
+Sin embargo, también tiene una menor precisión para este grupo, lo que significa que tiene una mayor probabilidad de clasificar a casos falsos como verdaderos.
+
+Por otro lado, el modelo con poda tiene una menor sensibilidad y precisión para los grupos "0-3251" y "3252-5164", lo que significa que tiene una menor capacidad para detectar casos verdaderos y una mayor probabilidad de clasificar a casos falsos como verdaderos para estos grupos.
+Sin embargo, el modelo con poda tiene una mayor especificidad para estos grupos, lo que significa que tiene una menor probabilidad de clasificar a casos falsos como verdaderos.
+
+En general, el modelo de árbol con poda tiene una exactitud ligeramente menor que el modelo sin poda (0.329 vs 0.335), pero es menos complejo y puede ser más fácil de interpretar y explicar.
+
+En general, un modelo de árbol sin poda se beneficia de tener una mayor complejidad, pero también tiene un mayor riesgo de sobreajuste, mientras que un modelo de árbol con poda tiene un menor riesgo de sobreajuste, pero también tiene un menor rendimiento debido a la poda.
+
+### 4.5 Se evalúa la tasa de error en cada nivel de árbol, la eficiencia en clasificación (en las fases de training, validación y test) y la comprensibilidad.
+
+Estas han sido calculadas para el árbol sin poda y árbol con poda en los puntos 4.3 y 4.4, respectivamente.
+
+### 4.6 Se interpretan y comentan las conclusiones.
+
+Uno de los principales beneficios de los árboles de decisión es su capacidad para manejar problemas con muchas variables y clases.
+Su habilidad para lidiar con una gran cantidad de variables y clases es una de las principales ventajas de los árboles de decisión.
+Además, son fáciles de interpretar y visualizar, ya que la estructura del árbol es fácil de entender y representa las decisiones y las características importantes en el problema.
+Los árboles de decisión también son robustos y pueden manejar tanto variables categóricas como numéricas.
+
+Sin embargo, uno de los principales inconvenientes de los árboles de decisión es su tendencia a sobreajustarse al conjunto de entrenamiento, lo que puede llevar a un mal rendimiento en el conjunto de pruebas.
+Esta tendencia a sobreajustarse a los datos de entrenamiento es una de las principales desventajas de los árboles de decisión.
+Por esta razón, es común usar técnicas de poda para controlar el tamaño del árbol y mejorar su generalización.
+La técnica de poda se utiliza para reducir el tamaño del árbol y mejorar la capacidad de generalización del modelo.
+
+Además, al igual que en los modelos anteriores, no se aprecia una clara correlación entre la variable dependiente y las variables independientes y, por ello, no se logra una división eficiente entre las ramas.
+La falta de una clara correlación entre la variable dependiente y las variables independientes puede dificultar la eficacia de la división entre ramas en los árboles de decisión.
+Por esto es importante realizar una buena selección y transformación de características.
+
+## Ejercicio 5
+
+### 5.1 Prueba con una variación u otro enfoque algorítmico con los algoritmos vistos en la asignatura.
+
+En esta ocasión, vamos a utilizar un modelo de regresión lineal para tratar de predecir el salario correspondiente a un empleo.
+
+La regresión lineal es un método estadístico que se utiliza para modelar la relación entre una variable dependiente y una o más variables independientes.
+El objetivo es encontrar los coeficientes del modelo que minimizan la diferencia entre los valores observados y los valores predichos por el modelo.
+
+El modelo de regresión lineal se representa matemáticamente como:
+
+$y = \beta_0 + \beta_1*x_1 + \beta_2*x_2 + ...+ \beta_n*x_n$
+
+donde y es la variable dependiente, $x_1$, $x_2$, ..., $x_n$ son las variables independientes y $\beta_0$, $\beta_1$, $\beta_2$, ..., $\beta_n$ son los coeficientes del modelo.
+
+![](images/paste-D2647957.png)
+
+Los coeficientes del modelo son los valores que se ajustan para minimizar la diferencia entre los valores observados y los valores predichos.
+$\beta_0$ es el término independiente o intercepto, y $\beta_1$, $\beta_2$, ..., $\beta_n$ son los términos de las variables independientes.
+
+La regresión lineal es útil para modelar relaciones lineales entre variables, es decir, relaciones donde el cambio en la variable dependiente es proporcional al cambio en las variables independientes.
+Sin embargo, no siempre es adecuado para modelar relaciones no lineales o relaciones más complejas.
+
+A continuación, para crear el modelo, vamos a dividir el conjunto de datos original en datos de entrenamiento y test de igual modo que en apartados anteriores y vamos a utilizar la función ***lm()*** para crear el modelo de regresión lineal.Esta función acepta como argumentos una fórmula y un conjunto de datos, y devuelve un objeto de modelo de regresión lineal.
+La fórmula especifica la relación entre las variables en los datos.
+Es una cadena de texto que especifica la relación entre la variable dependiente (o variable objetivo) y las variables independientes (o variables predictoras).
+La fórmula se escribe utilizando el operador '**\~'** para separar la variable dependiente de las variables independientes.
+El conjunto de datos es un data frame que contiene los datos utilizados para entrenar el modelo.
+Debe incluir las columnas especificadas en la fórmula.
+(fuente: [https://www.institutomora.edu.mx/testU/SitePages/martinpaladino/modelos_lineales_con_R.html](https://www.institutomora.edu.mx/testU/SitePages/martinpaladino/modelos_lineales_con_R.html#ajuste-de-modelo-lineales-con-lm)).
+
+```{r}
+# Recuperamos los datos preprocesados
+data <- dataAux
+
+# Eliminamos valores nulos que hayan podido quedar tras el preprocesado
+data <- na.omit(data)
+
+# Definimos semilla de aleatoriedad
+set.seed(1)
+
+# Separamos la etiqueta del resto de datos
+y <- data$sal
+X <- data %>% select(-sal)
+
+# Separamos los datos de entrenamiento y test de forma aleatoria
+split_prop <- 3 
+indexes = sample(1:nrow(data), size=floor(((split_prop-1)/split_prop)*nrow(data)))
+trainX<-X[indexes,]
+trainY<-y[indexes]
+testX<-X[-indexes,]
+testY<-y[-indexes]
+```
+
+```{r}
+trainY_df <- data.frame(y=trainY)
+model <- lm(y ~ ., data=cbind(trainX,trainY_df))
+summary(model)
+```
+
+El resumen del modelo proporciona información sobre los coeficientes del modelo, los residuos, el rendimiento del modelo y otras estadísticas.
+
+Los residuos son la diferencia entre los valores observados y los valores predichos por el modelo.
+El resumen de los residuos muestra la distribución de los residuos, con estadísticas como la media, la mediana, el cuartil 1 y 3, y el valor mínimo y máximo.
+
+Los coeficientes muestran la relación entre cada variable independiente y la variable dependiente.
+Por ejemplo, el coeficiente de la variable Longitud es -50.9610, lo que significa que por cada unidad de cambio en Longitud, se espera un cambio de -50.9610 en la variable dependiente (y).
+El error estándar del coeficiente es 43.7381, lo que indica la incertidumbre en la estimación del coeficiente.
+El valor t y el valor p proporcionan información sobre la significancia estadística del coeficiente.
+Un valor p pequeño (\<0.05) sugiere que el coeficiente es estadísticamente significativo.
+
+El R-cuadrado es una medida de qué porcentaje de la variación en los datos de salida (variable dependiente) es explicado por el modelo.
+El R-cuadrado es 0.05889, lo que significa que solo el 5.89% de la variación en los datos de salida es explicado por el modelo.
+El R-cuadrado ajustado tiene en cuenta el número de variables independientes y es 0.02472, lo que significa que solo el 2.47% de la variación en los datos de salida es explicada por el modelo.
+
+El estadístico F y su valor p proporcionan información sobre la significancia del modelo en general.
+El valor p es 0.06747, lo que significa que hay un 6.75% de posibilidades de obtener un modelo tan malo o peor debido al azar.
+Como el valor p es mayor que 0.05, no podemos rechazar la hipótesis nula de que el modelo no es significativo.
+Es importante notar que un valor p mayor a 0.05 no significa necesariamente que el modelo no sea bueno, pero puede sugerir que no hay suficiente evidencia para apoyar la idea de que el modelo es significativo.
+
+En general, se puede observar que el rendimiento del modelo no es muy bueno ya que el R-cuadrado es muy bajo.
+También se puede observar que algunos coeficientes tienen valores p mayores a 0.05, lo que sugiere que no son estadísticamente significativos.
+Esto puede indicar que algunas de las variables independientes no tienen una relación significativa con la variable dependiente o que se necesitan más datos para apoyar la relación.
+
+### 5.2 Se detalla, comenta y evalúa la calidad de clasificación.
+
+A continuación, vamos a ver cómo se comporta el modelo con el conjunto de datos de teste.
+Para ello, vamos a predecir los valores de los datos de testeo con el modelo y vamos a calcular el valor de las métricas Error absoluto medio (Mean Absolute Error, MAE) y Error cuadrático medio (Mean Squared Error, MSE).
+**MAE** mide la diferencia entre los valores predichos y los valores reales pero tomando en cuenta solo el valor absoluto de la diferencia.
+Un valor más pequeño de MAE indica un mejor ajuste del modelo a los datos.
+**MSE** mide la diferencia entre los valores predichos y los valores reales, al cuadrado.
+Un valor más pequeño de MSE indica un mejor ajuste del modelo a los datos.
+
+La principal diferencia entre el MAE y el MSE es que el MAE se enfoca en los errores absolutos mientras que el MSE se enfoca en los errores cuadráticos.
+El MSE es más sensible a los errores grandes, ya que los multiplica por si mismos, mientras que el MAE solo se enfoca en la magnitud del error.
+Esto significa que un solo error grande puede aumentar significativamente el MSE, mientras que el MAE solo se verá afectado moderadamente.
+Por lo tanto, el MSE es más útil para detectar patrones de error en los casos en los que los errores grandes son particularmente problemáticos, mientras que el MAE es más útil para detectar patrones de error en general.
+
+```{r}
+predictions <- predict(model, testX)
+mae <- mean(abs(as.numeric(testY) - as.numeric(predictions)))
+mae
+
+mse <- mean((as.numeric(testY) - as.numeric(predictions))^2)
+mse
+
+mae^2
+```
+
+En cuanto al MAE obtenido, vemos que el modelo tiene un desvío promedio de 1511.425, un valor extremadamente alto teniendo en cuenta la magnitud de los valores a predecir.
+
+En cuanto al MSE, vemos que tiene un valor de 3.046861\*10\^6, que es aún mayor que el MAE\^2, lo que sugiere que el modelo tiene una serie de errores grandes que hacen que aumente mucho este valor.
+
+Estos valores reflejan que el modelo no está realizando una buena predicción, y que es necesario hacer ajustes en el modelo o utilizar un enfoque diferente para mejorar su precisión.
+
+### 5.3 Regresión no lineal
+
+Dado que con una regresión lineal no se consigue crear un buen modelo para este dataset, vamos a probar utilizando una regresión no lineal, en este caso, con una **polinómica**.
+
+Los modelos de regresión no lineales son aquellos que no se ajustan a una función lineal entre las variables independientes y la variable dependiente.
+En lugar de eso, estos modelos utilizan funciones matemáticas más complejas para describir la relación entre las variables.
+
+La regresión polinómica es una técnica de regresión no lineal que se utiliza para modelar relaciones no lineales entre las variables.
+En lugar de utilizar una función lineal como en la regresión lineal, se utiliza un polinomio de grado mayor.
+El grado del polinomio se refiere al número de términos en el polinomio ($P(x) = c_0 + x*c_1 + x^2*c_2 + ... + x^n*c_n = \sum_{i=0}^{n}x^i*c_i$).
+El polinomio se ajusta al conjunto de datos mediante el ajuste de los coeficientes de los términos del polinomio a los datos.
+
+Al utilizar un polinomio de grado mayor, se permite al modelo adaptarse mejor a los datos y capturar patrones no lineales en los datos.
+Sin embargo, también hay un riesgo de sobreajuste, es decir, que el modelo se ajuste demasiado bien a los datos de entrenamiento pero no generalice bien a datos nuevos.
+Por lo tanto, es importante evaluar cuidadosamente el rendimiento del modelo en datos de prueba antes de utilizarlo en una aplicación real.
+
+Para ello, vamos a utilizar la función ***glm()*** (Generalized Linear Model) que crea modelos de regresión generalizados.
+La regresión generalizada es una extensión de la regresión lineal que permite modelar una amplia variedad de relaciones entre variables y distribuciones de error.
+La función glm() es capaz de manejar distintos tipos de distribuciones de error y link functions, lo que permite modelar una variedad de problemas de regresión, como la regresión polinómica.
+La sintaxis básica de la función **glm()** es la siguiente:
+
+`glm(formula, family, data)`
+
+Donde:
+
+-   **formula** es una fórmula que describe la relación entre las variables de interés.
+    Por ejemplo, $y ~ x + x^2$ describe una relación lineal entre la variable dependiente **y** y las variables independiente **x**.
+
+-   **family** es el parámetro opcional que se utiliza para especificar la distribución de error y el enlace.
+    Por defecto, se utiliza una distribución gaussiana y un enlace identity.
+
+-   **data** es el conjunto de datos que se utilizará para el ajuste del modelo.
+
+Para evitar un modelo demasiado complejo, vamos a generar una regresión polinómica en función de una única variable independiente, por lo tanto, debemos calcular qué variable independiente y grado del polinomio se ajustan mejor al modelo.
+Además, para tratar de evitar el sobreajuste de los distintos modelos generados, vamos a utilizar la **validación cruzada** - cross validation - una técnica utilizada para evaluar la precisión y robustez de un modelo de aprendizaje automático, consistente en dividir el conjunto de datos en varios subconjuntos, conocidos como "fold" y entrenar el modelo en varios subconjuntos diferentes mientras se evalúa en el subconjunto restante.
+Esto se repite varias veces, utilizando diferentes combinaciones de subconjuntos para entrenamiento y evaluación, de manera que cada punto de datos se utiliza una sola vez para evaluar el modelo.
+La ventaja de la validación cruzada es que permite obtener una medida más precisa de la precisión del modelo, ya que se utilizan varios subconjuntos de datos para evaluar el modelo, en lugar de utilizar solo un subconjunto de datos.
+También permite identificar si el modelo tiene problemas de sobreajuste o subajuste, ya que se evalúa en diferentes subconjuntos de datos.
+
+La función **cv.glm()** es una función en R que se utiliza para realizar validación cruzada en modelos de regresión generalizada creados con la función **`glm`()**.
+Esta función permite evaluar la precisión y robustez del modelo mediante la división del conjunto de datos en varios subconjuntos y entrenando y evaluando el modelo en diferentes combinaciones de subconjuntos.
+
+La sintaxis básica de la función **cv.glm()** es la siguiente:
+
+`cv.glm(data, glmfit, cost, K)`
+
+Donde:
+
+-   **data** es el conjunto de datos utilizado para el ajuste del modelo.
+
+-   **glmfit** es el objeto devuelto por la función **glm()** que contiene el modelo de regresión generalizada a evaluar.
+
+-   **cost** es una función de dos argumentos vectoriales que especifican la función de costo para la validación cruzada.
+    El primer argumento del costo debe corresponder a las respuestas observadas y el segundo argumento debe corresponder a las respuestas pronosticadas o ajustadas del modelo lineal generalizado.
+    cost debe devolver un valor escalar no negativo.
+    El valor predeterminado es la función de error cuadrático promedio.
+
+-   **K** es el número de subconjuntos o "fold" utilizados para la validación cruzada.
+    Generalmente, se suelen utilizanr 10 subconjuntos.
+
+La función **cv.glm()** devuelve un objeto que contiene información sobre el rendimiento del modelo en la validación cruzada, como la precisión promedio y la desviación estándar.
+También se pueden obtener información sobre la precisión del modelo en cada una de las iteraciones de validación cruzada.
+
+Fuentes: <https://rpubs.com/Cristina_Gil/Regr_no_lineal> ; <https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/glm> ; <https://www.rdocumentation.org/packages/boot/versions/1.3-28.1/topics/cv.glm>
+
+```{r}
+if(!require('boot')) install.packages('boot'); library(boot)
+if(!require('gridExtra')) install.packages('gridExtra'); library(gridExtra)
+
+# Datos de entrenamiento
+data <- cbind(trainY_df, trainX)
+
+# Dataframe para almacenar el mejor error de validación de cada variable 
+mejor.cv.error <- data.frame("variable.independiente"=factor(), "cv.error"=numeric())
+
+# Regresión polinómica con cada variable independiente
+for(col in colnames(trainX)){
+  # Dataframe con la variable dependiente y la independiente a analizar
+  aux_df <- select(data, y, col)
+  colnames(aux_df) <- c("y", "x")
+  
+  # Variable para almacenar el error de validacion minimo de la variable
+  min.error <- Inf
+  
+  # Vector para almacenar el error de validación de cada polinomio
+  cv.error <- rep(NA, 10)
+  
+  # Vector para almacenar el RSS de cada polinomio
+  rss <- rep (NA, 10)
+  
+  # Polinomio de grado 1 a 10
+  for (i in 1:10){
+    # Creo el modelo polinómico de grado i
+    polynomic_model <- glm(y ~ poly(x, i), data = aux_df)
+    
+    # Calculo error de validación y RSS
+    cv.error[i] <- cv.glm(aux_df, polynomic_model, K = 10)$delta[1]
+    rss[i] <- sum(polynomic_model$residuals^2)
+    
+    # Actualizo el mejor error de validación
+    if(cv.error[i] < min.error){
+      min.error <- cv.error[i]
+    }
+  }
+  
+  # Guardo el mejor error
+  mejor.cv.error <- rbind(mejor.cv.error, data.frame("variable.independiente" = col, "cv.error" = min.error))
+  
+  # Mostrar evolucion del error en función del grado del polinomio
+  ggp_mse <- ggplot(data = data.frame(grado_polinomio = 1:10, cv.error = cv.error), aes(x = grado_polinomio, y = cv.error)) +
+  geom_point(color = "orangered2") +
+  geom_path() +
+  scale_x_continuous(breaks = 0:10) +
+  labs(title = "cv.MSE ~ Grado de polinomio") +
+  theme_bw() +
+  theme(panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  theme(plot.title = element_text(hjust = 0.5))
+  
+  # Mostrar evolucion RSS en función del grado del polinomio
+  ggp_rss <- ggplot(data = data.frame(grado_polinomio = 1:10, RSS = rss), aes(x = grado_polinomio,y = RSS)) +
+  geom_point(color = "orangered2") +
+  geom_path() +
+  scale_x_continuous(breaks=0:10) +
+  labs(title = "RSS ~ Grado de polinomio") +
+  theme_bw() +
+  theme(panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  theme(plot.title = element_text(hjust = 0.5))
+  
+  # Muestro las dos gráficas en una
+  grid_title <- textGrob(toupper(col), gp = gpar(fontsize = 14, fontface = "bold", col="red"))
+  grid.arrange(ggp_mse, ggp_rss, ncol = 1, top = grid_title)
+}
+
+
+```
+
+```{r}
+# Mostrar evolucion del error en función del grado de la variable independiente
+ggplot(data = mejor.cv.error, aes(x = variable.independiente, y = cv.error, group = 1)) +
+  geom_point(color = "orangered2") +
+  geom_line() +
+  labs(title = "cv.MSE ~ Variable independiente") +
+  theme_bw() +
+  theme(panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text.x = element_text(angle = 45)) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Vemos que la variable que permite generar el mejor modelo es 'numeric.Role.Category'.
+Vemos además, que este resultado se obtiene con una regresión polinómica de grado 2.
+Por lo tanto, utilizamos este modelo para predecir las etiquetas del conjunto de test.
+
+```{r}
+polynomic_model <- lm(y ~ poly(numeric.Role.Category, 2), data = data)
+summary(polynomic_model)
+```
+
+```{r}
+ggplot(data = data, aes(x = numeric.Role.Category, y = y)) +
+geom_point(col = "darkgrey") +
+geom_smooth(method = "lm", formula = y ~ poly(x, 2), color = "blue", se = TRUE, level = 0.95) +
+labs(title = "Polinomio grado 3: y ~ numeric.Role.Category") +
+theme_bw() + theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r}
+predictions <- predict(polynomic_model, testX)
+mae <- mean(abs(as.numeric(testY) - as.numeric(predictions)))
+mae
+
+mse <- mean((as.numeric(testY) - as.numeric(predictions))^2)
+mse
+
+mae^2
+```
+
+Aunque el error obtenido con el modelo de regresión no lineal es menor que el obtenido con el modelo anterior de regresión lineal, este sigue teniendo un valor demasiado elevado teniendo en cuenta la magnitud de los valores a predecir.
+Los valores de MAE y MSE refleja la dificultad del modelo para aprender de este conjunto de datos, los cuales, no están distribuidos en el espacio de atributos de forma que al modelo le sea posible generalizar a partir de estos datos.
+
+### 5.3 Se comparan y comentan los resultados de manera exhaustiva con el anterior método de construcción.
+
+El modelo de regresión, a diferencia del modelo de clasificación, permite analizar la distancia entre un valor predicho y su valor real.
+
+A pesar de eso, ambos tipos de modelos no logran generar un buen modelo que se ajuste a los datos y sea capaz de realizar predicciones correctas debido a que los datos no están distribuidos en el espacio de atributos, de forma que los modelo les es posible generalizar a partir de estos datos.
+
+En cuanto a los resultados, se puede observar que el modelo de clasificación tiene una sensibilidad baja en todas las categorías, lo que significa que tiene dificultades para detectar correctamente los casos positivos.
+Además, la precisión también es baja, lo que indica que tiene un alto número de falsos positivos.
+Por otro lado, la especificidad es alta, lo que significa que tiene pocos falsos negativos.
+El f-measure también es bajo, lo que indica una mala performance general del modelo.
+
+En cuanto a los modelos de regresión, se puede observar que el modelo lineal tiene un error medio absoluto (mae) de 1511.425, mientras que el modelo polinómico tiene un mae de 1491.881.
+Esto significa que el modelo polinómico tiene un mejor desempeño en términos de precisión en las predicciones.
+Sin embargo, ambos modelos tienen un error medio cuadrático (mse) alto, lo que indica que aún tienen dificultades para ajustarse adecuadamente a los datos.
+
+En resumen, los modelos de clasificación y regresión presentados en este ejemplo no logran generar un buen modelo debido a la distribución de los datos, y aún presentan un desempeño bajo en términos de precisión y ajuste a los datos.
+Es posible que sea necesario utilizar técnicas adicionales de preprocesamiento y selección de características para mejorar la performance de los modelos.
+
+### 5.4 Identifica y comenta, qué posibles limitaciones tienen los datos que has seleccionado para obtener conclusiones con los modelos utilizados (supervisado).
+
+Los datos seleccionados para este ejemplo tienen varias limitaciones que pueden afectar la capacidad de los modelos para generar conclusiones precisas y generales:
+
+1.  **Falta de información**: los datos utilizados en este ejemplo pueden no contener toda la información relevante para los modelos utilizados, lo que puede dar lugar a conclusiones inexactas.
+
+2.  **Falta de calidad**: los datos utilizados en este ejemplo pueden estar incompletos, incorrectos o inconsistentes, lo que puede dar lugar a conclusiones inexactas.
+
+3.  **Falta de normalización**: los datos utilizados en este ejemplo pueden no estar normalizados, lo que puede dar lugar a un sesgo en los modelos utilizados.
+
+4.  **Falta de distribución**: Los datos utilizados en este ejemplo pueden no estar distribuidos de forma que los modelos puedan generalizar correctamente.
+
+Es importante tener en cuenta estas limitaciones al interpretar los resultados de los modelos utilizados y al tomar decisiones basadas en ellos
+
+## Ejercicio 6
+
+### 6.1 Se identifican posibles riesgos del uso del modelo (mínimo 300 palabras).
+
+El uso de modelos en cualquier campo conlleva ciertos riesgos que deben ser considerados antes de implementar el modelo en un entorno real.
+A continuación se describen algunos de los riesgos más comunes que pueden presentarse al utilizar un modelo:
+
+1.  **Riesgo de sesgo**: Uno de los riesgos más importantes al utilizar un modelo es el riesgo de sesgo.
+    Un modelo puede estar sesgado si los datos utilizados para entrenarlo no son representativos de la población general.
+    Esto puede ocurrir debido a la falta de diversidad en los datos de entrenamiento o debido a la falta de normalización.
+    Por ejemplo, si los datos de entrenamiento están compuestos principalmente por hombres, el modelo puede tener dificultades para clasificar correctamente a las mujeres.
+    Además, si los datos de entrenamiento no están normalizados, el modelo puede tener dificultades para generalizar a otros conjuntos de datos.
+    Para mitigar este riesgo, es importante asegurar que los datos de entrenamiento sean representativos de la población general y que estén normalizados.
+
+2.  **Riesgo de sobreajuste**: El sobreajuste es otro riesgo común al utilizar un modelo.
+    Un modelo puede estar sobreajustado si se utilizan demasiadas características o se utilizan características irrelevantes para el problema en cuestión.
+    Esto puede ocurrir debido a la falta de selección de características adecuada.
+    Por ejemplo, si se utilizan demasiadas características irrelevantes, el modelo puede tener una buena performance en los datos de entrenamiento, pero una mala performance en los datos de prueba o en el entorno real.
+    Para mitigar este riesgo, es importante utilizar técnicas de selección de características para seleccionar solo las características relevantes.
+
+3.  **Riesgo de datos no válidos**: Un modelo puede ser afectado por datos no válidos, como datos incompletos, incorrectos o inconsistentes.
+    Esto puede llevar a conclusiones inexactas o a una mala performance del modelo.
+
+4.  **Riesgo de interpretación incorrecta**: Otro riesgo común al utilizar un modelo es el riesgo de interpretación incorrecta.
+    Un modelo puede ser interpretado de forma incorrecta debido a la falta de conocimiento o experiencia del usuario.
+    Por ejemplo, un modelo puede generar resultados que sugieren una relación causual entre dos variables, pero en realidad, esta relación puede ser correlacional.
+    Para mitigar este riesgo, es importante asegurar que los usuarios del modelo tengan el conocimiento y la experiencia necesarios para interpretar correctamente los resultados.
+
+5.  **Riesgo de automatización**: El riesgo de automatización es otro riesgo común al utilizar un modelo.
+    Un modelo puede automatizar decisiones que deben ser tomadas por seres humanos, lo que puede llevar a decisiones que no tienen en cuenta factores importantes como el contexto o la ética.
+    Por ejemplo, un modelo puede ser utilizado para automatizar decisiones de credito, pero si no se tienen en cuenta factores como la situación financiera o el historial laboral del solicitante, puede llevar a decisiones desfavorables para algunas personas.
+    Para mitigar este riesgo, es importante asegurar que los usuarios del modelo tengan el conocimiento y la experiencia necesarios para tomar decisiones éticas y considerando todos los factores importantes.
+
+En resumen, al utilizar un modelo es importante considerar estos riesgos y tomar medidas para mitigarlos.
+Esto puede incluir la revisión de los datos utilizados para entrenar el modelo, la interpretación cuidadosa de los resultados y la transparencia en la utilización del modelo.
+Además, es importante recordar que los modelos son solo herramientas y no deben ser considerados como sustitutos de la toma de decisiones humanas.
+
+## Ejercicio 7
+
+### 7.1 Qué he aprendido en esta práctica, qué limitaciones he observado y como lo he solucionado (mínimo 300 palabras).
+
+En esta práctica, he aprendido la importancia de encontrar un conjunto de datos válido para poder obtener resultados precisos y fiables.
+A través de esta experiencia, me di cuenta de que la calidad de los datos es crucial para el éxito del modelo y que un conjunto de datos incompleto o inconsistente puede generar resultados erróneos.
+
+Una vez que encontré un conjunto de datos válido, aprendí la importancia de preparar los datos correctamente para poder utilizarlos en el modelo.
+Esto incluyó tareas como la limpieza de datos, la normalización, la codificación de variables categóricas, entre otras.
+Aprendí que estas tareas son esenciales para asegurar que los datos estén listos para ser utilizados en el modelo y que su falta puede generar resultados erróneos.
+
+Además, encontré dificultades para detectar las variables más relevantes para el problema, lo cual me permitiera tener una mejor comprensión del conjunto de datos y como podría ser utilizado para resolver el problema.
+Descubrí que no todas las variables son necesarias para el modelo y que su inclusión puede generar un sobreajuste.
+Para solucionar esto, utilicé técnicas como el análisis de correlación y la selección de características para determinar las variables más relevantes.
+También aprendí a utilizar técnicas de visualización para explorar los datos y descubrir patrones o tendencias que me permitieran identificar las variables más relevantes.
+
+Finalmente, he tenido problemas para dar con un modelo válido para el problema y ajustar sus parámetros para obtener los mejores resultados posibles.
+Aprendí que existen diferentes modelos disponibles para resolver un problema específico y que es importante elegir el que mejor se adapte al conjunto de datos y al problema en cuestión.
+También aprendí la importancia de ajustar los parámetros del modelo para obtener los mejores resultados posibles, y que este proceso es una parte importante del proceso de aprendizaje automático.
+
+En resumen, esta práctica me permitió aprender sobre la importancia de encontrar un conjunto de datos válido, preparar los datos correctamente, detectar las variables más relevantes, y seleccionar un modelo válido para el problema y ajustar sus parámetros.
+También me enfrenté a varias limitaciones, como la dificultad para detectar variables relevantes y la dificultad para ajustar los parámetros del modelo, y aprendí a solucionar estos problemas a través de técnicas específicas.

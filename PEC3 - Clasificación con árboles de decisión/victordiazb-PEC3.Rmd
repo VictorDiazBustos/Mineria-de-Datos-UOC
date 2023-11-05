@@ -1,0 +1,681 @@
+---
+title: "victordiazb-PEC3: Clasificación con árboles de decisión"
+author: "victordiazb"
+date: "Diciembre 2022"
+output:
+  html_document:    
+    highlight: default
+    number_sections: yes
+    theme: cosmo
+    toc: yes
+    toc_depth: 2
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  pdf_document:
+    highlight: zenburn
+    toc: yes
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introducción
+
+En este ejercicio vamos a seguir los pasos del ciclo de vida de un proyecto de minería de datos.
+
+En primer lugar haremos un análisis de los datos, donde limpiaremos el conjunto de datos y buscaremos correlaciones entre variables para comprender mejor los datos.
+
+Posteriormente, utilizaremos un árbol de decisión, que es un algoritmo de aprendizaje supervisado, para clasificar los datos del archivo credit.csv que se encuentra en el aula.
+
+Una vez que hayamos realizado el análisis de los datos, podremos entrenar nuestro modelo de árbol de decisión utilizando el conjunto de datos limpio y correlacionado.
+Luego, utilizaremos el modelo entrenado para hacer predicciones sobre el conjunto de datos de prueba y evaluar la precisión del modelo.
+
+Si las predicciones son satisfactorias, podremos utilizar el modelo entrenado para hacer predicciones en datos reales.
+Sin embargo, es importante recordar que el rendimiento del modelo puede variar dependiendo del conjunto de datos utilizado, por lo que es importante evaluar y ajustar el modelo regularmente para asegurar su precisión y confiabilidad.
+
+# Análisis descriptivo y de correlaciones
+
+Cargamos el conjunto de datos proporcionado en el aula '*credit.csv*'.
+Además, usamos la función *attach(),* la cual carga una base de datos en el espacio de trabajo y permite que los objetos en ella estén disponibles para su uso.
+Esto significa que después de cargar una base de datos con la función *attach()*, puedes acceder a los objetos en la base de datos sin tener que usar el nombre completo de la base de datos cada vez.
+Así, cargando la base de datos *data* con la función *attach()*, puedes acceder a una variable cualquiera *var* en esa base de datos simplemente escribiendo *`var`* en lugar de *`data$var`*.
+La función *attach()* es útil cuando trabajas con bases de datos grandes y no quieres tener que escribir el nombre completo de la base de datos cada vez que quieras acceder a un objeto en ella.
+
+```{r message= FALSE, warning=FALSE}
+data<-read.csv("./credit.csv",header=T,sep=",")
+attach(data)
+str(data)
+```
+
+El juego de datos contiene 1000 registros con 21 variables, tanto categóricas, como numéricas, las cuales, definimos a continuación (fuente: [https://archive.ics.uci.edu/ml/datasets/statlog+(german+credit+data)](https://archive.ics.uci.edu/ml/datasets/statlog+(german+credit+data)):
+
+-   *'checking_balance'*: Estado de la cuenta corriente existente
+
+-   *'months_loan_duration'*: Duración en meses
+
+-   *'credit_history'*: Historial de créditos
+
+-   *'purpose'*: Propósito
+
+-   *'amount'*: Cantidad de crédito
+
+-   *'savings_balance'*: Cuenta de ahorros / bonos
+
+-   *'employment_length'*: Empleo actual
+
+-   *'installment_rate'*: Cuota en porcentaje del ingreso disponible
+
+-   *'personal_status'*: Situación personal y sexo
+
+-   *'other_debtors'*: Otros deudores / avalistas
+
+-   *'residence_history'*: Residencia actual
+
+-   *'property'*: Propiedad
+
+-   *'age'*: Edad en años
+
+-   *'installment_plan'*: Otros planes de pago a plazos
+
+-   *'housing'*: Vivienda
+
+-   *'existing_credits'*: Número de créditos existentes en este banco
+
+-   *'default'*: Impago de créditos, se refiere a la situación en la que un prestatario no cumple con sus obligaciones de pago.
+    "1" implica que cumple las obligaciones de pago y por tanto se le concedería el crédito; y "2" el contrario, no cumple las obligaciones de pago y se le denegaría el crédito
+
+-   *'dependents'*:Número de personas obligadas a proporcionar mantenimiento
+
+-   *'telephone'*: Teléfono registrado o no
+
+-   *'foreign_worker'*: Trabajador extranjero
+
+-   *'job'*: Trabajo
+
+A continuación, vamos a ver la cantidad de valores nulos o vacíos en cada atributo:
+
+```{r message= FALSE, warning=FALSE}
+colSums(is.na(data))
+```
+
+```{r message= FALSE, warning=FALSE}
+colSums(data=="")
+```
+
+No existen valores nulos ni vacíos, por lo que no será necesario hacer ninguna limpieza al respecto.
+
+Comprobamos también que no existan valores *missing*, un tipo de valor especial que indica que una determinada posición en un vector o en una tabla de datos no tiene un valor asignado.
+Los valores missing se representan con el símbolo *'NA'* (Not Available, no disponible), a diferencia de los nulos que se representan como *'NULL'*.
+
+```{r message= FALSE, warning=FALSE}
+missing <- data[is.na(data),]
+dim(missing)
+```
+
+Vemos que tampoco existen valores *missing* por lo que podemos seguir con el análisis sin preocuparnos por este aspecto.
+
+A continuación, se comprueba si existen errores en variables categóricas, como, por ejemplo, datos mal escritos.
+Para ello, utilizaremos la función *is.character* para saber su una columna está compuesta por datos categóricos o no; *factor()*, que codifica un vector como un factor (estructura de datos utilizada para representar un vector como datos categóricos), para obtener el factor de una columna; y *levels()* para obtener los valores únicos del factor de cada columna.
+
+```{r message= FALSE, warning=FALSE}
+if(!require(dplyr)) install.packages('dplyr'); library(dplyr)
+for (i in colnames(select_if(data,is.character))){
+  data[i] <- factor(data[[i]])
+  print(levels(data[[i]]))
+}
+
+data$default <- factor(data$default)
+print(levels(data$default))
+```
+
+```{r message= FALSE, warning=FALSE}
+print(colnames(select_if(data,is.factor)))
+```
+
+```{r message= FALSE, warning=FALSE}
+print(colnames(select_if(data,is.numeric)))
+```
+
+Se observa que en el juego de datos hay **13 variables categóricas** (*checking_balance, credit_history, purpose, savings_balance, employment_length, personal_status, other_debtors, property, installment_plan, housing, telephone, foreign_worker, job*) y **8 numéricas** (*months_loan_duration, amount, installment_rate, residence_history, age, existing_credits, default, dependents*).
+
+Vemos además que las variables categóricas están correctamente escritas y que no se encuentran errores en ellas.
+
+A continuación, analizaremos las variables numéricas mediante herramientas de visualización y estadísticas:
+
+```{r message= FALSE, warning=FALSE}
+print(summary(data))
+```
+
+```{r message= FALSE, warning=FALSE}
+if(!require(ggplot2)) install.packages('ggplot2'); library(ggplot2)
+if(!require(ggpubr)) install.packages('ggpubr'); library(ggpubr)
+if(!require(grid)) install.packages('grid'); library(grid)
+if(!require(gridExtra)) install.packages('gridExtra'); library(gridExtra)
+if(!require(C50)) install.packages('C50'); library(C50)
+
+grid.newpage()
+
+plotbyDuration<-ggplot(data,aes(months_loan_duration))+geom_bar() +labs(x="months", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("loan_duration")
+
+plotbyAmount<-ggplot(data,aes(amount))+geom_bar() +labs(x="amount", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("amount")
+
+plotbyRate<-ggplot(data,aes(installment_rate))+geom_bar() +labs(x="installment", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("installment_rate")
+
+plotbyResidence<-ggplot(data,aes(residence_history))+geom_bar() +labs(x="years", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("residence_history")
+
+plotbyAge<-ggplot(data,aes(age))+geom_bar() +labs(x="Years", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("age")
+
+plotbyCredits<-ggplot(data,aes(existing_credits))+geom_bar() +labs(x="existing_credits", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("existing_credits")
+
+plotbyDefault<-ggplot(data,aes(default))+geom_bar() +labs(x="default", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("default")
+
+plotbyDependents<-ggplot(data,aes(dependents))+geom_bar() +labs(x="dependents", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("dependents")
+
+grid.arrange(plotbyDuration,plotbyAmount,plotbyRate,plotbyResidence, ncol=2)
+
+grid.arrange(plotbyAge, plotbyCredits,plotbyDefault,plotbyDependents, ncol=2)
+```
+
+Vemos cómo es la muestra analizando la distribución de las variables disponibles.
+
+Nos interesa describir la relación entre el impago del préstamo (variable *default*) y cada uno de las variables mencionadas anteriormente.
+Para ello, por un lado graficaremos mediante diagramas de barras la cantidad de "*defaults*" y "*no defaults"* según la duración en meses del préstamo, cantidad, cuota en porcentaje del ingreso disponible, historial de residencia (en años) de los clientes, edad, número de créditos existentes en este banco y número de personas obligadas a proporcionar mantenimiento.
+
+Para ello, en primer lugar vamos a discretizar las variables "*months_loan_duration*", "*amount*" y "*age*", ya que estas tienen un número demasiado elevado de registros distintos.
+Así, utilizaré la función *cut()*, que toma un vector numérico y divide los valores en grupos de acuerdo a los límites especificados:
+
+```{r message= FALSE, warning=FALSE}
+# Discretizo "months_loan_duration"
+data$months_loan_duration_disc <- cut(data$months_loan_duration, c(0,20,40,Inf), labels=c("0-20", "21-40", ">40"))
+
+# Discretizo "amount"
+data$amount_disc <- cut(data$amount, c(-Inf,5000,10000,Inf), labels=c("<5000", "5001-10000", ">10000"))
+
+# Discretizo "age"
+data$age_disc <- cut(data$age, c(0,20,40,60,80), labels=c("0-20", "21-40", "41-60", "61-80"))
+```
+
+A continuación graficamos estas nuevas variables discretizadas:
+
+```{r message= FALSE, warning=FALSE}
+grid.newpage()
+
+plotbyDuration_disc<-ggplot(data,aes(months_loan_duration_disc))+geom_bar() +labs(x="months", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("loan_duration")
+
+plotbyAmount_disc<-ggplot(data,aes(amount_disc))+geom_bar() +labs(x="amount", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("amount")
+
+plotbyAge_disc<-ggplot(data,aes(age_disc))+geom_bar() +labs(x="Years", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("age")
+
+grid.arrange(plotbyDuration_disc,plotbyAmount_disc,plotbyAge_disc, ncol=2)
+```
+
+Y procedemos a graficar estos campos agrupados por "default" o "no default":
+
+```{r message= FALSE, warning=FALSE}
+grid.newpage()
+
+plotbyDuration<-ggplot(data,aes(months_loan_duration_disc,fill=default))+geom_bar() +labs(x="months", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("loan_duration")
+
+plotbyAmount<-ggplot(data,aes(amount_disc,fill=default))+geom_bar() +labs(x="amount", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("amount") + 
+  scale_x_discrete(limits = c("<5000", "5001-10000", ">10000"))
+
+plotbyRate<-ggplot(data,aes(installment_rate,fill=default))+geom_bar() +labs(x="installment", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("installment_rate")
+
+plotbyResidence<-ggplot(data,aes(residence_history,fill=default))+geom_bar() +labs(x="years", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("residence_history")
+
+plotbyAge<-ggplot(data,aes(age_disc,fill=default))+geom_bar() +labs(x="Years", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("age")
+
+plotbyCredits<-ggplot(data,aes(existing_credits,fill=default))+geom_bar() +labs(x="existing_credits", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("existing_credits")
+
+plotbyDependents<-ggplot(data,aes(dependents,fill=default))+geom_bar() +labs(x="dependents", y="Customers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("dependents")
+
+grid.arrange(plotbyDuration,plotbyAmount,plotbyRate,plotbyResidence, ncol=2)
+
+grid.arrange(plotbyAge, plotbyCredits,plotbyDependents, ncol=2)
+```
+
+Por otro lado, para obtener los datos que estamos graficando utilizaremos el comando table para dos variables que nos proporciona una tabla de contingencia.
+
+```{r message= FALSE, warning=FALSE}
+tabla_DMT <- table(data$months_loan_duration_disc, default)
+print(tabla_DMT)
+cat("\n\n")
+print(prop.table(tabla_DMT, margin=1))
+```
+
+```{r message= FALSE, warning=FALSE}
+tabla_DAmT <- table(data$amount_disc, default)
+print(tabla_DAmT)
+cat("\n\n")
+print(prop.table(tabla_DAmT, margin=1))
+```
+
+```{r message= FALSE, warning=FALSE}
+tabla_DIT <- table(data$installment_rate, default)
+print(tabla_DIT)
+cat("\n\n")
+print(prop.table(tabla_DIT, margin=1))
+```
+
+```{r message= FALSE, warning=FALSE}
+tabla_DRT <- table(data$residence_history, default)
+print(tabla_DRT)
+cat("\n\n")
+print(prop.table(tabla_DRT, margin=1))
+```
+
+```{r message= FALSE, warning=FALSE}
+tabla_DAgT <- table(data$age_disc, default)
+print(tabla_DAgT)
+cat("\n\n")
+print(prop.table(tabla_DAgT, margin=1))
+```
+
+```{r message= FALSE, warning=FALSE}
+tabla_DET <- table(data$existing_credits, default)
+print(tabla_DET)
+cat("\n\n")
+print(prop.table(tabla_DET, margin=1))
+```
+
+```{r message= FALSE, warning=FALSE}
+tabla_DDT <- table(data$dependents, default)
+print(tabla_DDT)
+cat("\n\n")
+print(prop.table(tabla_DDT, margin=1))
+```
+
+De estos datos obtenemos información muy valiosa:
+
+-   "*months_loan_duration_disc*": el número de defaults para créditos con una duración de 0-20 meses y de 20-40 meses es similar (133 y 124, respectivamente).
+    No obstante, debemos tener en cuenta que la muestra de 0-20 meses es mayor y que, por tanto, porcentualmente, la tasa de defaults es menos (24% vs. 33,97%).
+    Por su parte, los créditos con una duración superior a 40 meses tienen una tasa de defaults bastante mayor, siendo superior a la mitad (53,08%), viendo así una clara relación ascendente entre esta variable y la tasa de defaults.
+
+-   "*amount_disc*": en cuanto a la cantidad prestada, se ve también una clara relación ascendente.
+    A medida que mayor es la cantidad del préstamo, mayor es la tasa de defaults (\<5000: 27,33%; 5001-10000: 36,48%; \>10000: 60%)
+
+-   "*installment_rate*": en cuanto a la cuota en porcentaje del ingreso disponible, se aprecia tambíen una ligera relación ascendente (1: 25%; 2: 26,84%; 3: 28,66%; 4: 33,4%).
+
+-   "*residence_history*": la tasa de default es menor entre los clientes con un historial de residencia en su primer año, con una tasa del 27,69%.
+    La tasa de default es mayor entre los clientes con un historial de residencia de dos años o más, con una tasa del 31,49% para aquellos con dos años de historial, del 28,86% para aquellos con tres años de historial y del 30,02% para aquellos con cuatro años de historial.
+    En este caso no se aprecia una tendencia clara
+
+-   "*age_disc*": en cuando a la edad de los prestatarios, se observa una tendencia descendiente en la tasa de defaults, es decir, a mayor edad de los prestararios, menor porcentaje de defaults datos (0-20 años: 37,5%; 21-40 años: 31,36%; 41-60 años: 27,07%; 60-80 años: 22,22%).
+    No obstante, en los rangos mas extremos (0-20 y 60-80) la muestra es algo pequeña.
+
+-   "*existing_credits*": se observa que la tasa de default es mayor entre los clientes con dos o tres créditos existentes, con una tasa del 27,62% y 21,42% respectivamente.
+    Por otro lado, entre los clientes con un solo crédito existente y con 4, la tasa de default es del 31,59% y 33,33%, respectivamente, aunque en este último la muestra es muy pequeña (4 "*default*" y 2 "*no default*").
+
+-   "*dependents*": por último, respecto al número de personas obligadas a proporcionar mantenimiento, la tasa de defaults es del 30,05% para los créditos con una persona, y del 29,67% para créditos con dos personas.
+    Aunque se ve una disminución, no es muy significativa.
+
+Los resultados anteriores muestran los datos de forma descriptiva, podemos añadir algún test estadístico para validar el grado de significancia de la relación.
+La librería "DescTools" nos permite instalarlo fácilmente.
+
+```{r message= FALSE, warning=FALSE}
+if(!require(DescTools)) install.packages('DescTools'); library(DescTools)
+
+print(Phi(tabla_DMT)) 
+print(CramerV(tabla_DMT))
+
+print(Phi(tabla_DAmT)) 
+print(CramerV(tabla_DAmT))
+
+print(Phi(tabla_DIT)) 
+print(CramerV(tabla_DIT)) 
+
+print(Phi(tabla_DRT)) 
+print(CramerV(tabla_DRT)) 
+
+print(Phi(tabla_DAgT))
+print(CramerV(tabla_DAgT)) 
+
+print(Phi(tabla_DET)) 
+print(CramerV(tabla_DET)) 
+
+print(Phi(tabla_DDT)) 
+print(CramerV(tabla_DDT)) 
+
+```
+
+La V de Cramer y Phi son medidas de la asociación o correlación entre dos variables categóricas.
+Estas medidas se utilizan para evaluar la fuerza y la dirección de la asociación entre dos variables, es decir, si una variable tiene un impacto sobre la otra y en qué dirección.
+
+La V de Cramer se utiliza para medir la asociación entre dos variables categóricas en una tabla de contingencia 2x2 (es decir, una tabla con dos filas y dos columnas).
+La V de Cramer toma valores entre 0 y 1, siendo 0 indicativo de ausencia de asociación y 1 indicativo de asociación perfecta.
+
+Phi es similar a la V de Cramer, pero se utiliza para medir la asociación entre dos variables categóricas en una tabla de contingencia de cualquier tamaño (es decir, una tabla con más de dos filas y dos columnas).
+Al igual que la V de Cramer, Phi toma valores entre 0 y 1, siendo 0 indicativo de ausencia de asociación y 1 indicativo de asociación perfecta.
+
+El mayor valor obtenido para ambas medidas (esto ocurre en el contexto de analizar tablas de contingencia 2x2) es 0.1810392 con la variable "*months_loan_duration_disc*", por lo que no hay a penas asociación.
+
+Una alternativa interesante a las barras de diagramas, es el plot de las tablas de contingencia.
+Obtenemos la misma información pero para algunos receptores puede resultar más visual.
+
+```{r message= FALSE, warning=FALSE}
+par(mfrow=c(1,2))
+plot(tabla_DMT, col = c("black","#008000"), main = "default vs. loan_duration")
+plot(tabla_DAmT, col = c("black","#008000"), main = "default vs. amount")
+plot(tabla_DIT, col = c("black","#008000"), main = "default vs. installment_rate")
+plot(tabla_DRT, col = c("black","#008000"), main = "default vs. residence_history")
+plot(tabla_DAgT, col = c("black","#008000"), main = "default vs. age")
+plot(tabla_DET, col = c("black","#008000"), main = "default vs. existing_credits")
+plot(tabla_DDT, col = c("black","#008000"), main = "default vs. dependents")
+
+```
+
+Estas gráficas muestran en el eje vertical la tasa de defaults y en el eje horizontal la cantidad de datos perteneciente a cada valor de la variable comparada con el campo "default".
+
+# Preparación de los datos
+
+De cara a la generación del modelo, vamos a eliminar las columnas "*month_load_duration*", "*age*" y "*amount"* para eliminar información redundante, ya que estas han sido discretizadas anteriormente.
+Además, eliminamos también la columna"*dependents*" ya que, como hemos visto antes, tiene una asociación practicamente nula (V de Cramer = 0.003014):
+
+```{r message= FALSE, warning=FALSE}
+data <- data %>% select(-months_loan_duration, -amount, -age, -dependents)
+```
+
+Para la futura evaluación del árbol de decisión, es necesario dividir el conjunto de datos en un conjunto de entrenamiento y un conjunto de prueba.
+El conjunto de entrenamiento es el subconjunto del conjunto original de datos utilizado para construir un primer modelo; y el conjunto de prueba, el subconjunto del conjunto original de datos utilizado para evaluar la calidad del modelo, lo más correcto será utilizar un conjunto de datos diferente del que utilizamos para construir el árbol, es decir, un conjunto diferente del de entrenamiento.
+
+No hay ninguna proporción fijada con respecto al número relativo de componentes de cada subconjunto, pero la más utilizada acostumbra a ser 2/3 para el conjunto de entrenamiento y 1/3, para el conjunto de prueba.
+
+La variable por la que clasificaremos es el campo "*default*".
+De esta forma, tendremos un conjunto de datos para el entrenamiento y uno para la validación.
+
+```{r message= FALSE, warning=FALSE}
+set.seed(1)
+y <- data$default
+X <- data %>% select(-default)
+```
+
+De forma dinámica podemos definir una forma de separar los datos en función de un parámetro.
+Así, definimos un parámetro que controla el split de forma dinámica en el test.
+
+```{r message= FALSE, warning=FALSE}
+split_prop <- 3 
+indexes = sample(1:nrow(data), size=floor(((split_prop-1)/split_prop)*nrow(data)))
+trainX<-X[indexes,]
+trainY<-y[indexes]
+testX<-X[-indexes,]
+testY<-y[-indexes]
+```
+
+Después de una extracción aleatoria de casos es altamente recomendable efectuar un análisis de datos mínimo para asegurarnos de no obtener clasificadores sesgados por los valores que contiene cada muestra.
+En este caso, verificaremos que la proporción del supervivientes es más o menos constante en los dos conjuntos:
+
+```{r message= FALSE, warning=FALSE}
+summary(trainX)
+```
+
+```{r message= FALSE, warning=FALSE}
+summary(trainY)
+```
+
+```{r message= FALSE, warning=FALSE}
+summary(testX)
+```
+
+```{r message= FALSE, warning=FALSE}
+summary(testY)
+```
+
+Verificamos fácilmente que no haya diferencias graves que puedan sesgar las conclusiones.
+La proporción de defaults es de $\frac{473}{193} = 2,45$ para el conjunto de entrenamiento y de $\frac{227}{107} = 2,12$ para el conjunto de test.
+
+# Primer árbol de decisión
+
+Los árboles de decisión son un tipo de algoritmo que se utiliza con frecuencia para resolver problemas de clasificación supervisada en minería de datos debido a su facilidad de interpretación y su buena capacidad de explicación.
+Estos modelos se pueden emplear tanto en tareas de clasificación como en problemas de regresión supervisados.
+
+Los árboles de decisión tienen como objetivo principal dividir el conjunto de datos de entrada en regiones disjuntas, de manera que todas las muestras pertenecientes a una misma región sean de la misma clase.
+Si una región incluye muestras de diferentes clases, entonces se divide en regiones más pequeñas siguiendo el mismo principio.
+Este proceso se detiene cuando se ha dividido el conjunto de datos en regiones en las que todas las muestras pertenecen a una única clase.
+Un árbol de decisión se considera completo o puro cuando es posible construir un árbol que cumple esta condición.
+
+Un árbol de decisión está compuesto por nodos terminales o hojas, que representan regiones etiquetadas según una clase, y nodos internos o de división, que representan condiciones que permiten decidir a qué subregión va cada elemento que llega a dicho nodo.
+Cuando se presenta una nueva muestra para ser evaluada por un árbol de decisión, el proceso comienza en el nodo raíz, que contiene una condición que determina por qué rama del árbol debe ir la muestra.
+Una vez seleccionada la rama, la muestra llegará a otro nodo con otra condición o a un nodo terminal, en cuyo caso se determinará la etiqueta predicha para la muestra basándose en la etiqueta indicada en el nodo terminal.
+
+Nuestro objetivo es crear un árbol de decisión que permita analizar qué tipo de prestatario tiene más probabilidades de incumplir sus obligaciones de pago, y por tanto, no se le debería de conceder un crédito.
+Para ello, se crea el árbol de decisión usando los datos de entrenamiento (no hay que olvidar que la variable outcome es de tipo factor):
+
+```{r message= FALSE, warning=FALSE}
+trainY <-  as.factor(trainY)
+model <- C50::C5.0(trainX, trainY,rules=TRUE )
+summary(model)
+```
+
+Errors muestra el número y porcentaje de casos mal clasificados en el subconjunto de entrenamiento.
+El árbol obtenido clasifica erróneamente 121 de los 666 casos dados, una tasa de error del 18,2%.
+
+# Reglas obtenidas y puntos interesantes
+
+```{r message= FALSE, warning=FALSE}
+model <- C50::C5.0(trainX, trainY)
+plot(model,gp = gpar(fontsize = 3.5))
+```
+
+Como podemos ver, el árbol es demasiado grande para poder visualizarlo con claridad.
+Por lo tanto, voy a exportar este plot a una imagen *"decision_tree.png"* que será incluida en la entrega:
+
+```{r message= FALSE, warning=FALSE}
+png("decision_tree.png", res=80, height=1200, width=2800) 
+   plot(model,gp = gpar(fontsize = 10)) 
+dev.off()
+```
+
+La función *png()* es utilizada para crear un archivo de imagen en formato PNG con una resolución de 80 píxeles por pulgada, una altura de 1200 píxeles y un ancho de 2800 píxeles.
+La función *plot()* es utilizada para dibujar el modelo de árbol de decisión especificado en el archivo de imagen, y la función *gpar()* se utiliza para especificar algunos parámetros de gráfico adicionales, como el tamaño de la fuente.
+Finalmente, la función *dev.off()* se utiliza para cerrar el dispositivo de gráficos y guardar el archivo de imagen.
+
+A partir del árbol creado, resulta sencillo extraer un conjunto de reglas que ayudan a entender el problema de clasificación.
+Las reglas podrían resumirse en que se obtendrá el bonus si se cumplen algunas de las siguientes condiciones:
+
+1.  Clientes con un empleo de 4-7 años, cuota en porcentaje del ingreso disponible \<=2% y un historial de más de 3 años, pertenecerán a la clase **1** ("*no* *default*") con un **93,8%** de probabilidad.
+
+2.  Clientes trabajadores no extrangeros, pertenecerán a la clase **1** ("*no* *default*") con un **92,3%** de probabilidad.
+
+3.  Clientes con propósito de "coche" u "otros" y propietarios de una vivienda, pertenecerán a la clase **1** ("*no* *default*") con un **90,5%** de probabilidad.
+
+4.  Clientes con propósito de "radio/TV", cuota en porcentaje del ingreso disponible \<=2%, propietarios de una vivienda y 1 o menos créditos existentes, pertenecerán a la clase **1** ("*no* *default*") con un **89,7%** de probabilidad.
+
+5.  Clientes con estado de la cuenta corriente como "\>200 DM" o "desconocido", pertenecerán a la clase **1** ("*no* *default*") con un **85,4%** de probabilidad.
+
+6.  Clientes con una cuenta de ahorros mayor a 501 DM o desconocida, pertenecerán a la clase **1** ("*no* *default*") con un **83,9%** de probabilidad.
+
+7.  Clientes con una edad entre 61 y 80 años, pertenecerán a la clase **1** ("*no* *default*") con un **79,5%** de probabilidad.
+
+8.  Préstamos con una duración menos a 20 meses, pertenecerán a la clase **1** ("*no* *default*") con un **77,7%** de probabilidad.
+
+9.  Clientes con estado de la cuenta corriente inferior a 200 DM, pagos atrasados (critical) o dedua pagada parcialmente (repaid), una cuenta de ahorros inferior a 500 DM, una vivienda actual, plan a plazos por el banco, con un trabajo "skilled employee" y una duración del préstamos inferior a 20 meses, pertenecerán a la clase **2** ("*default*") con un **90%** de probabilidad.
+
+10. Clientes con estado de la cuenta corriente inferior a 200 DM, un historial de créditos completamente pagado, una cuenta de ahorros inferior a 500 DM y teléfono desconocido, pertenecerán a la clase **2** ("*default*") con un **83,3%** de probabilidad.
+
+11. Clientes con estado de la cuenta corriente inferior a 200 DM, una deuda pagada parcialmente, una cuenta de ahorros inferior a 500 DM, cuota en porcentaje del ingreso disponible superior al 2%, del sexo femenino, sin avalistas ni tampoco plan de pago a plazos, con un trabajo "skilled employee" y una duración del préstamos inferior a 20 meses, pertenecerán a la clase **2** ("*default*") con un **83,3%** de probabilidad.
+
+12. Clientes con estado de la cuenta corriente inferior a 200 DM, una cuenta de ahorros inferior a 500 DM, que sea trabajador extrangero y una duración de préstamos de más de 20 meses, pertenecerán a la clase **2** ("*default*") con un **63,8%** de probabilidad.
+
+Por defecto, se pertenece a la clase **1** ("*no* *default*") ya que esta tiene mayor presencia en el conjunto de datos de entrenamiento.
+
+# Análisis de la bondad de ajuste sobre el conjunto de test y matriz de confusión
+
+La bondad de ajuste de un modelo es una medida de cómo bien el modelo se ajusta a un conjunto de datos.
+Esto se puede evaluar utilizando un conjunto de test, que es un conjunto de datos que se utiliza para evaluar el rendimiento del modelo.
+La bondad de ajuste se puede medir utilizando varias métricas, como la precisión, la sensibilidad o la especificidad.
+Aunque para entenderlas, primero debemos explicar otras métricas:
+
+-   **Verdaderos Positivos** (TP - True Positive): puntos clasificados como "*default*" (2) que son "*default*".
+
+-   **Falsos Positivos** (FP - False Positive): puntos clasificados como "*default*" (2) que son "no *default*" (1).
+
+-   **Verdaderos Negativos** (TN - True Negative): puntos clasificados como "no *default*" (1) que son "*no* *default*".
+
+-   **Falsos Negativos** (FN - False Negative): puntos clasificados como "no *default*" (1) que son "*default*" (2).
+
+-   **Sensibilidad**: También se conoce como Tasa de Verdaderos Positivos (True Positive Rate) ó recall.
+    Es la proporción de casos positivos que fueron correctamente identificados por el algoritmo.
+    Se calcula como: $\frac{TP}{TP+FN}$.
+
+-   **Precisión**: También llamada valor de la predicción positiva, se refiere a la dispersión del conjunto de valores obtenidos a partir de mediciones repetidas de una magnitud.
+    Cuanto menor es la dispersión mayor la precisión.
+    Se representa por la proporción de verdaderos positivos dividido entre todos los resultados positivos: $\frac{TP}{TP+FP}$.
+
+-   **especificidad**: También conocida como tasa de verdaderos negativos, se refiere a cuántas veces el modelo clasificó correctamente a una clase específica cuando esa clase no estaba presente.
+    Se calcula como: $\frac{TN}{TN+FP}$
+
+-   **F-measure**: Combina la precisión y sensibilidad en una sola métrica.
+    Se calcula como: $2 * \frac{Precision * Sensibilidad}{Precision + Sensibilidad}$
+
+```{r message= FALSE, warning=FALSE}
+# Predice las clases en el conjunto de test
+predictions <- predict(model, testX)
+
+# Crear una tabla con los valores reales y sus predicciones
+compare <- data.frame(predictions=predictions, real=testY)
+
+# Calcular TP, FP, TN y FN
+# Para ello filtro la tabla por los valores explicados 
+# anteriormente y almaceno el número de filas resultante
+TP <- nrow(filter(compare, predictions==2 & real==2))
+FP <- nrow(filter(compare, predictions==2 & real==1))
+TN <- nrow(filter(compare, predictions==1 & real==1))
+FN <- nrow(filter(compare, predictions==1 & real==2))
+
+# Meto todas las métricas en una tabla
+metrics <- data.frame(TP=TP, FP=FP, TN=TN, FN=FN)
+
+# Calcular sensibilidad, precisión y especificidad
+metrics$sensibilidad <- c(TP/(TP+FN))
+metrics$precision <- c(TP/(TP+FP))
+metrics$especificidad <- c(TN/(TN+FP))
+metrics$f_measure <- c(2*(metrics$precision*metrics$sensibilidad)/(metrics$precision+metrics$sensibilidad))
+
+print(metrics)
+```
+
+En este caso, se obtienen una sensibilidad y precisión bastante bajas (37,38% y 52,6%), mientras la especificidad es bastante mayor (84,14%).
+Esto indica que el modelo es bueno acertando casos negativos ("*no default*"), pero peor para acertar con los casos positivos ("*default*").
+Esto se debe a que, debido al elevado núemero de casos negativos en los datos respecto al número de casos positivos, el modelo tiende a clasificar como negativos casos que son positivos.
+En cuanto a f-measure, ya que sensibilidad y precisión dan un resultado bajo, el resultado de este también es bajo (43,71%).
+
+A continuación, calculamos la precisión general (*accuracy*), es decir, el porcentaje de registros clasificados correctamente, independientemente de su clase, calculado como:$\frac{datos\_bien\_clasificados}{datos\_totales}$.
+Esto es equivalente al valor promedio de un array de 0 (fallo) y 1 (acierto):
+
+```{r message= FALSE, warning=FALSE}
+# Calcula accuracy
+accuracy <- mean(predictions == testY)
+print(accuracy)
+```
+
+Se observa que el modelo clasifica correctamente el 69,16% de los datos.
+Esto se debe a que, a pesar de ser malo detectando positivos, el conjunto de datos tienen una gran proporción de casos negativos.
+
+A continuación, creamos la matriz de confusión:
+
+```{r message= FALSE, warning=FALSE}
+tabla_PNT <- table(testY, predictions)
+print(tabla_PNT)
+cat("\n\n")
+print(prop.table(tabla_PNT, margin=1))
+```
+
+Observamos que en la diagonal principal de las proporciones se encuentran la especificidad y sensibilidad, lo cual nos sirve para verificar que están bien calculados.
+
+# Ajuste de modelos de árbol de decisión complementarios
+
+En este apartado, vamos a utilizar el algoritmo ***Random Forest*** y a comparar sus resultados con los del árbol de decisión.
+
+Random Forest es un algoritmo de aprendizaje automático que se utiliza para resolver problemas de clasificación y regresión.
+Se basa en la creación de múltiples árboles de decisión y en la toma de decisiones por medio de la votación de la mayoría, es decir, cuando se utiliza el algoritmo de Random Forest para realizar predicciones, cada árbol del modelo realiza una predicción independientemente, luego, se toma la predicción mayoritaria como la predicción final del modelo.
+
+Para entrenar un modelo de Random Forest, se necesita un conjunto de datos de entrenamiento que contenga las características o variables de entrada y la etiqueta o variable de salida para cada ejemplo.
+Cada árbol de decisión del modelo se entrena con un subconjunto aleatorio del conjunto de datos de entrenamiento y con un subconjunto aleatorio de las características de entrada.
+
+Una vez que se han entrenado todos los árboles, se pueden hacer predicciones para un nuevo conjunto de datos de prueba.
+Cada árbol del modelo realiza una predicción y luego se toma la predicción mayoritaria como la predicción final del modelo.
+
+Una de las principales ventajas de Random Forest es que es menos propenso al sobreajuste en comparación con un único árbol de decisión.
+El sobreajuste es un fenómeno que ocurre cuando un modelo de aprendizaje automático es demasiado complejo y se ajusta demasiado a los datos de entrenamiento, lo que reduce su capacidad de generalización a datos nuevos.
+
+Además, es un algoritmo muy eficiente y escalable, lo que lo hace adecuado para conjuntos de datos grandes y complejos.
+
+Para ello, vamos a utilizar la función *randomForest()* de la librería "randomForest" con los mismos conjuntos de datos de entrenamiento y test del caso anterior:
+
+```{r message= FALSE, warning=FALSE}
+if(!require(randomForest)) install.packages('randomForest'); library(randomForest)
+
+rf <- randomForest(trainX, trainY)
+summary(rf)
+```
+
+Una vez entrenado el modelo, procedemos a generar las predicciones y calcular sus métricas:
+
+```{r message= FALSE, warning=FALSE}
+# Predice las clases en el conjunto de test
+predictions_rf <- predict(rf, testX)
+
+# Crear una tabla con los valores reales y sus predicciones
+compare_rf <- data.frame(predictions=predictions_rf, real=testY)
+
+# Calcular TP, FP, TN y FN
+# Para ello filtro la tabla por los valores explicados 
+# anteriormente y almaceno el número de filas resultante
+TP <- nrow(filter(compare_rf, predictions==2 & real==2))
+FP <- nrow(filter(compare_rf, predictions==2 & real==1))
+TN <- nrow(filter(compare_rf, predictions==1 & real==1))
+FN <- nrow(filter(compare_rf, predictions==1 & real==2))
+
+# Meto todas las métricas en una tabla
+metrics <- data.frame(TP=TP, FP=FP, TN=TN, FN=FN)
+
+# Calcular sensibilidad, precisión y especificidad
+metrics$sensibilidad <- c(TP/(TP+FN))
+metrics$precision <- c(TP/(TP+FP))
+metrics$especificidad <- c(TN/(TN+FP))
+metrics$f_measure <- c(2*(metrics$precision*metrics$sensibilidad)/(metrics$precision+metrics$sensibilidad))
+metrics$accuracy <- c(mean(predictions_rf == testY))
+
+print(metrics)
+```
+
+El algoritmo de Random Forest obtiene una especifidad aún mayor que el árbol de decisión, con un porcentaje del 92,51%, lo cual indica que este es mejor aún detectando negativos.
+
+Además de tener una alta especifidad, Random Forest también tiene una mayor precisión en comparación con el árbol de decisión, con un porcentaje del 64,58%.
+Esto significa que tiene menos falsos positivos, es decir, que es menos propenso a clasificar un caso como positivo cuando en realidad es negativo.
+
+Sin embargo, a pesar de tener una alta especifidad y precisión, el algoritmo de Random Forest presenta una sensibilidad inferior al árbol de decisión, con un porcentaje del 28,97%.
+Esto quiere decir que tiende a tener más falsos negativos, es decir, que es más propenso a clasificar un caso como negativo cuando en realidad es positivo.
+
+En cuanto al f-measure, que es una métrica que combina especifidad y sensibilidad para evaluar la precisión de un modelo de clasificación, el algoritmo de Random Forest presenta un valor del 41,25%, lo que indica que es aún peor para los casos positivos, ya que tiende a clasificar más a menudo a los datos como negativos ("no default").
+
+Por último, en cuanto al accuracy, este tiene una tasa de acierto superior (71,85%).
+Esto se debe a que, a pesar de ser peor para detectar casos positivos, es mejor para los negativos, los cuales tienen mayor presencia en el conjunto de datos.
+
+A continuación mostramos la matriz de confusión a igual modo que para el algoritmo anterior para verificar el cálculo correcto de las métricas:
+
+```{r message= FALSE, warning=FALSE}
+tabla_PNT_rf <- table(testY, predictions_rf)
+print(tabla_PNT_rf)
+cat("\n\n")
+print(prop.table(tabla_PNT_rf, margin=1))
+```
+
+# Conclusiones
+
+En general, los resultados obtenidos en el estudio indican que el algoritmo de Random Forest es mejor que el árbol de decisión en términos de especifidad y precisión, lo que significa que es muy bueno en la detección de negativos y tiene menos falsos positivos.
+Sin embargo, presenta una sensibilidad y un f-measure inferiores al árbol de decisión, lo que significa que es menos preciso en la detección de casos positivos
+
+Por otro lado, el accuracy del algoritmo de Random Forest es superior al del árbol de decisión, lo que significa que tiene una mayor tasa de acierto en general.
+Esto se debe a que, a pesar de ser peor para detectar casos positivos, es mejor para los negativos, los cuales tienen mayor presencia en el conjunto de datos.
+
+En este caso, Random Forest se ha ajustado mejor a los datos que el árbol de decisión, sin llegar a un sobreajuste, siendo capaz de detectar con mayor eficiencia los casos negativos, sin suponer un gran sacrificio para los casos positivos.
+
+En conclusión, el algoritmo de Random Forest es una opción muy viable para resolver este problema de clasificación debido a su alta especifidad y precisión, especialmente cuando se trata de detectar casos negativos.
+Sin embargo, es importante tener en cuenta que puede tener un rendimiento inferior en la detección de casos positivos en comparación con el árbol de decisión.
+Por lo tanto, será importante evaluar cómo se adaptan estos modelos a conjuntos de datos con mayor presencia de casos positivos.

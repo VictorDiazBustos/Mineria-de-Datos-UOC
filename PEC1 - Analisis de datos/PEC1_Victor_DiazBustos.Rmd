@@ -1,0 +1,452 @@
+---
+title: "PEC1_Victor_DiazBustos"
+author: "victordiazb"
+date: "2022-11-09"
+output: html_document
+---
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+pkg <- c("tidyr", "dplyr", "ggplot2", "knitr", "rmarkdown",'tinytex')
+
+new.pkg <- pkg[!(pkg %in% installed.packages())]
+
+if (length(new.pkg)) {
+  install.packages(new.pkg, repos = "http://cran.rstudio.com")
+}
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(rmarkdown)
+library(tinytex)
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Ejercicio 1:
+
+Propón un proyecto completo de minería de datos.
+La organización de la respuesta tiene que coincidir en las fases típicas del ciclo de vida de un proyecto de minería de datos.
+**No hay que realizar las tareas de la fase**.
+Para cada fase indica cuál es el objetivo de la fase y el producto que se obtendrá.
+Utiliza ejemplos de qué y cómo podrían ser las tareas.
+Si hay alguna característica que hace diferente el ciclo de vida de un proyecto de minería respecto a otros proyectos indícalo.
+
+Un ejemplo de proyecto de minería de datos puede ser un estudio de detección de COVID, en el cual se trata de generar un modelo capaz de predecir si un paciente padece o no de COVID-19 a partir de sus síntomas, datos personales e historial médico.
+
+Para este proyecto se distinguen distintas fases:
+
+### Definición de la tarea de minería de datos
+
+Como se ha mencionado anteriormente, este proyecto trata de generar un modelo capaz de predecir si un paciente padece o no de COVID-19 a partir de sus síntomas, datos personales e historial médico.
+
+### Preparación de los datos
+
+Una vez definido el objetivo el proyecto, el primer paso es obtener y verificar la validez de los datos.
+Para ello, bastaría con obtener un registro lo suficientemente extenso de pruebas de TC con dosis baja junto a su resultado.
+
+Además, en esta fase se debe considerar la limpieza y transformación de datos, en caso de ser necesaria, así como la reducción de dimensionalidad, donde se busca principalmente tratar valores nulos y/o repetidos y atributos redundantes.
+
+### Construcción del modelo
+
+A continuación, tras el preprocesado de los datos, se procede al entrenamiento de un modelo capaz de predecir la presencia o no del virus del COVID en un paciente.
+Para ello, se debe dividir el conjunto de datos en datos de entrenamiento, test y validación, buscando además el mejor conjunto de parámetros para el modelo, evitando así que el modelo requiera de más iteraciones de las definidas para tener una tasa de acierto correcta, así como que se produzca un sobreajuste del modelo, es decir, que se genere un modelo demasiado complejo que no sea capaz de generalizar sus predicciones.
+
+### Integración de resultados en el proceso
+
+El último paso será integrar los resultados de la minería de datos en el proceso típico del sistema de información en el que esté aplicándose, creando, por ejemplo, un programa para que los médicos puedan predecir la portación o no del virus a partir de la información de un nuevo paciente.
+
+### Observaciones finales
+
+Finalmente, se deberá hacer énfasis en la actualización del modelo, haciéndose nuevas preguntas, plantearse el uso de datos no considerados previamente, emprendiendo así un nuevo proceso de selección y limpieza de datos, el cual dará lugar a un nuevo modelo que actualice y reemplace al anterior.
+
+## Ejercicio 2:
+
+A partir del juego de datos utilizado en el ejemplo anterior, realiza las tareas previas a la generación de un modelo de minería de datos explicadas en los módulos "El proceso de minería de datos" y "Preprocesado de los datos y gestión de características".
+Puedes utilizar de referencia el ejemplo anterior, pero procura cambiar el enfoque y analizar los datos en función de las diferentes dimensiones que presentan los datos.
+Opcionalmente y valorable se pueden añadir al estudio datos de otros años para realizar comparaciones temporales (<https://www.nhtsa.gov/file-downloads?p=nhtsa/downloads/FARS/>) o añadir otros hechos a estudiar relacionados, por ejemplo el consumo de drogas en los accidentes (<https://static.nhtsa.gov/nhtsa/downloads/FARS/2020/National/FARS2020NationalCSV.zip>)
+
+### Carga, visualización y explicación de los datos
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Cargamos el juego de datos
+path = 'accident.CSV'
+accidentData <- read.csv(path, row.names=NULL)
+
+# Se verifica la estructura del conjunto de datos y se ve el número de columnas y algunos datos contenidos en las filas
+structure = str(accidentData)
+```
+
+Como se puede apreciar existen 81 atributos y 35766 registros
+
+Se revisa la descripción de las variables contenidas en el fichero y si los tipos de variables se corresponden con las cargadas.
+Se organizan lógicamente para darles sentido y se construye un diccionario de datos apoyándose en la documentación auxiliar:
+
+-   **STR_CASE**: identificador del accidente
+
+**DIMENSIÓN VEHÍCULOS**
+
+-   **VE_TOTAL** número de vehículos implicados en total
+-   **VE_FORMS** número de vehículos en movimiento implicados
+-   **PVH_INVL** número de vehículos estacionados implicados
+
+**DIMENSIÓN PEATONES**
+
+-   **PEDS** número de peatones implicados
+-   **PERSONS** número de ocupante de vehículo implicados
+-   **PERMVIT** número conductores y ocupantes implicados
+-   **PERNOTMVIT** número peatones, ciclistas, a caballo... Cualquier cosa menos vehículo motorizado
+
+**DIMENSIÓN GEOGRÁFICA**
+
+-   **STATE**: codificación de estado
+-   **STATENAME**: nombre de estado
+-   **COUNTY**: identificador de contado
+-   **COUNTYNAME**: condado
+-   **CITY**: identificador de ciudad
+-   **CITYNAME**: ciudad
+-   **NHS**: 1 ha pasado a autopista del NHS 0 no
+-   **NHSNAME**: TBD
+-   **ROUTE**: identificador de ruta
+-   **ROUTENAME**: ruta
+-   **TWAY_ID**: vía de tránsito (1982)
+-   **TWAY_ID2**: vía de tránsito (2004)
+-   **RUR_URB**: identificador de segmento rural o urbano
+-   **RUR_URBNAME**: segmento rural o urbano
+-   **FUNC_SYS**: clasificación funcional segmento
+-   **FUNC_SYSNAME**: TBD
+-   **RD_OWNER**: identificador propietario del segmento
+-   **RD_OWNERNAME**: propietario del segmento
+-   **MILEPT**: milla int
+-   **MILEPTNAME**: milla chr
+-   **LATITUDE**: latitud int
+-   **LATITUDENAME**: latitud chr
+-   **LONGITUD**: longitud int
+-   **LONGITUDNAME**: longitud chr
+-   **SP_JUR código**: jurisdicción
+-   **SP_JURNAME**: jurisdicción
+
+**DIMENSIÓN TEMPORAL**
+
+-   **DAY**: día
+-   **DAYNAME**: día repetido
+-   **MONTH**: mes
+-   **MONTHNAME**: nombre de mes
+-   **YEAR**: año
+-   **DAY_WEEK**: día de la semana
+-   **DAY_WEEKNAME**: nombre de día de la semana
+-   **HOUR**: hora
+-   **HOURNAME**: franja hora
+-   **MINUTE**: minuto int
+-   **MINUTENAME**: minuto chr
+
+**DIMENSIÓN CONDICIONES ACCIDENTE**
+
+-   **HARM_EV**: código primero acontecimiento del accidente que produzca daños o lesiones
+-   **HARM_EVNAME**: primer acontecimiento del accidente que produzca daños o lesiones
+-   **MAN_COLL**: código de posición de los vehículos
+-   **MAN_COLLNAME**: posición de los vehículos
+-   **RELJCT1**: código si hay área de intercambio
+-   **RELJCT1NAME**: si hay área de intercambio
+-   **RELJCT2**: código proximidad cruce
+-   **RELJCT2NAME**: proximidad cruce
+-   **TYP_INT**: código tipo de intersección
+-   **TYP_INTNAME**: tipo de intersección
+-   **WRK_ZONE**: código tipología de obras
+-   **WRK_ZONENAME**: tipología de obras
+-   **RAIL_ROAD**: código ubicación vehículo a la vía
+-   **RAIL_ROADNAME**: ubicación vehículo a la vía
+-   **LGT_COND**: código condición lumínica
+-   **LGT_CONDNAME**: condición lumínica
+
+**DIMENSIÓN METEOROLÓGICA**
+
+-   **WEATHER**: código tiempo
+-   **WEATHERNAME**: tiempo
+
+**OTROS**
+
+-   **SCH_BUSS**: código si vehículo escolar implicado
+-   **SCH_BUSNAME**: vehículo escolar implicado
+-   **RAIL**: código si dentro o cerca paso ferroviario
+-   **RAILNAME**: si dentro o cerca paso ferroviario
+-   **FATAL** muertes
+-   **DRUNK_DR** conductores bebidos
+
+**DIMENSIÓN SERVICIO EMERGENCIAS**
+
+-   **NOT_HOUR**: hora notificación a emergencias int
+-   **NOT_HOURNAME**: hora notificación a emergencias franja
+-   **NOT_MIN**: minuto notificación a emergencias int
+-   **NOT_MINNAME**: minuto notificación a emergencias chr
+-   **ARR_HOUR**: hora llegada emergencias int
+-   **ARR_HOURNAME**: hora llegada emergencias franja
+-   **ARR_MIN**: minuto llegada emergencias int
+-   **ARR_MINNAME**: minuto llegada emergencias franja
+-   **HOSP_HR**: hora llegada hospital int
+-   **HOSP_HRNAME**: hora llegada hospital franja
+-   **HOSP_MN**: minuto llegada hospital int
+-   **HOSP_MNNAME**: minuto llegada hospital franja
+
+**DIMENSIÓN FACTORES RELACIONADOS ACCIDENTE**
+
+-   **CF1**: código factores relacionados con el accidente 1
+-   **CF1NAME**: factores relacionados con el accidente 1
+-   **CF2**: código factores relacionados con el accidente 2
+-   **CF2NAME**: factores relacionados con el accidente 2
+-   **CF3**: código factores relacionados con el accidente 3
+
+### Preprocesado y gestión de características
+
+**LIMPIEZA**
+
+Se mira si hay valores vacíos o nulos
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+colSums(is.na(accidentData))
+```
+
+Se aprecia que no hay valores nulos, aunque se debe verificar que no haya campos llenos de espacios en blanco:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+colSums(accidentData=="")
+```
+
+En este caso se detecta que el campo *'TWAY_ID2'* tiene 26.997 valores en blanco.
+Devido al elevado número de registros vacíos en dicho atributo, decido eliminarlo.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(dplyr)
+accidentData<-select(accidentData, -TWAY_ID2)
+```
+
+A continuación se va a discretizar la variable *'HOURNAME'* para poder tratar con visión las distintas franjas horarias, dándole un valor de '1' a la franja horaria 00:00-05:59, '2' a la franja horaria 06:00-11:59, '3' a la franja horaria 12:00-17:59, '4' a la franja horaria 18:00-23:59 y '5' para horas desconocidad (Unknown Hours), guardando estos valores en la columna *'DISC_HOURNAME'*.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+discreted_values <- c()
+for(y in 1:nrow(accidentData)){
+  val <- switch(accidentData$HOURNAME[y],
+    "0:00am-0:59am" = 1, 
+    "1:00am-1:59am" = 1, 
+    "2:00am-2:59am" = 1,
+    "3:00am-3:59am" = 1, 
+    "4:00am-4:59am" = 1, 
+    "5:00am-5:59am" = 1, 
+    "6:00am-6:59am" = 2, 
+    "7:00am-7:59am" = 2, 
+    "8:00am-8:59am" = 2, 
+    "9:00am-9:59am" = 2, 
+    "10:00am-10:59am" = 2, 
+    "11:00am-11:59am" = 2, 
+    "12:00pm-12:59pm" = 3,
+    "1:00pm-1:59pm" = 3, 
+    "2:00pm-2:59pm" = 3, 
+    "3:00pm-3:59pm" = 3, 
+    "4:00pm-4:59pm" = 3, 
+    "5:00pm-5:59pm" = 3,
+    "6:00pm-6:59pm" = 4, 
+    "7:00pm-7:59pm" = 4,
+    "8:00pm-8:59pm" = 4, 
+    "9:00pm-9:59pm" = 4, 
+    "10:00pm-10:59pm" = 4, 
+    "11:00pm-11:59pm" = 4, 
+    "Unknown Hours" = 5
+  )
+  discreted_values <- c(discreted_values,val)
+}
+
+accidentData$DISC_HOURNAME <- discreted_values
+```
+
+### Análisis y conclusiones de los datos
+
+A continuación se realiza un análisis de los datos y se buscan correlaciones entre los atributos *'DISC_HOURNAME', 'DAY_WEEK' y 'DRUNK_DR'.* Para ello, se realizan varios histogramas que nos permitan visualizar con mayor claridad las correlaciones entre dichos atributos.
+
+A continuación se realiza un análisis de los datos y se buscan correlaciones entre atributos.
+Para ello, se realizan varios histogramas que nos permitan visualizar con mayor claridad las correlaciones entre dichos atributos.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+if(!require('ggplot2')) install.packages('ggplot2'); library('ggplot2')
+if(!require('Rmisc')) install.packages('Rmisc'); library('Rmisc')
+if(!require('dplyr')) install.packages('dplyr'); library('dplyr')
+if(!require('xfun')) install.packages('xfun'); library('xfun')
+
+summary(accidentData$DISC_HOURNAME)
+ggp <- ggplot(accidentData, aes_string(x = "DISC_HOURNAME")) +
+  geom_histogram(bins = 30, fill = "cornflowerblue", color = "black",ggtittle ="Contador ocurrencias")
+plot(ggp)
+```
+
+Observaciones:
+
+*Franja horaria en la que se produjo el accidente*: Analizaremos con más detalle este dato más adelante para derivar un nuevo dato: Número de fallecidos en función de la franja horaria en la que se produjo el accidente.
+A priori, se aprecia que la franja horaria en la que se producen mas accidentes es entre las 18:00 y las 23:59.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+summary(accidentData$DRUNK_DR)
+ggp <- ggplot(accidentData, aes_string(x = "DRUNK_DR")) +
+  geom_histogram(bins = 30, fill = "cornflowerblue", color = "black",ggtittle ="Contador ocurrencias")
+plot(ggp)
+```
+
+Observaciones:
+
+*Conductores bebidos involucrados en el accidente*: La media es de 0.26 conductores bebidos por accidente.
+La franja de conductores bebidos por accidente va de 0 hasta 4 conductores.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+summary(accidentData$DAY_WEEK)
+ggp <- ggplot(accidentData, aes_string(x = "DAY_WEEK")) +
+  geom_histogram(bins = 30, fill = "cornflowerblue", color = "black",ggtittle ="Contador ocurrencias") + 
+  scale_x_continuous(breaks = c(1:7))
+plot(ggp)
+```
+
+Observaciones:
+
+*Dia de la semana en el que se produce el accidente*: Se aprecia un ligero aumento de accidentes en los fines de semana (domingo(1), viernes(6) y sábado(7)).
+La franja de dias de la semana va de 1 hasta 7.
+
+Relacion entre franja horaria y dia de la semana en la que se produce el accidente.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Agrupo por dia de la semana y franja horaria
+df1 <- accidentData %>%
+group_by(accidentData$DISC_HOURNAME, accidentData$DAY_WEEK) %>%
+dplyr::summarise(counts = n())
+colnames(df1) <- c("DISC_HOURNAME", "DAY_WEEK", "ACCIDENTS")
+df1
+
+# Muestro mapa de calor
+ggplot(df1, aes(x =DISC_HOURNAME, y = DAY_WEEK, fill = ACCIDENTS)) +
+  geom_tile(color = "black") +
+  geom_text(aes(label = ACCIDENTS), color = "white", size = 4) +
+  coord_fixed()
+```
+
+Como se puede apreciar, se produce una cantidad de accidentes ligeramente mayor en la franja de las 18:00-23:59 en viernes(6) y sabados(7).
+Esto se puede deber a un mayor índice de conductores bebidos debido al ocio que se produce en estos dias de la semana.
+Para corroborarlo, se va a hacer un análisis parecido, agrupando por dias y franjas horarias, pero contando el número de conductores bebidos en lugar del número de accidentes.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Agrupo por dia de la semana y franja horaria
+df2 <- accidentData %>%
+group_by(accidentData$DISC_HOURNAME, accidentData$DAY_WEEK, accidentData$DRUNK_DR) %>%
+dplyr::summarise(counts = n())
+
+# Agrupo número de conductores bebidos por día de la semana y franjas horarias
+drunk_counts = c()
+previous_day = 1
+count <- 0
+for (y in 1:nrow(df2)){
+  if(df2$`accidentData$DAY_WEEK`[y] != previous_day | y == nrow(df2)){
+    previous_day = df2$`accidentData$DAY_WEEK`[y]
+    drunk_counts <- c(drunk_counts, count)
+    count <- 0
+  }
+  count <- count + (df2$`accidentData$DRUNK_DR`[y] * df2$counts[y])
+}
+
+df3 <- df2 %>%
+group_by(df2$`accidentData$DISC_HOURNAME`, df2$`accidentData$DAY_WEEK`) %>%
+dplyr::summarise(counts = n())
+colnames(df3) <- c("DISC_HOURNAME", "DAY_WEEK","DRUNK_DRIVERS")
+df3$DRUNK_DRIVERS <- drunk_counts
+df3
+
+# Muestro mapa de calor
+ggplot(df3, aes(x =DISC_HOURNAME, y = DAY_WEEK, fill = DRUNK_DRIVERS)) +
+  geom_tile(color = "black") +
+  geom_text(aes(label = DRUNK_DRIVERS), color = "white", size = 4) +
+  coord_fixed()
+```
+
+Como se puede apreciar, hay un elevado número de accidentes en los que el conductor iba bebido en la franja de las 18:00-23:59 de los viernes y los sabados.
+Sin embargo este dato no nos confirma aún nuestra hipótesis anterior, el consumo de alcohol en horario de ocio implica un mayor número de accidentes, ya que, no sabemos si se produce un mayor número de accidentes por un aumento en el consumo de alcohol, o simplemente, como hay más accidentes, habrá también más conductores ebrios.
+En caso de que fuese el alcohol el factor clave en este proceso, los viernes y sábados debería haber una proporción mayor de conductores ebrios en dicha franja horaria.
+Por lo tanto, a continuación calculo el número de conductores alcoholizados por accidente, para lo cual creo una **nueva variable** *'PTE_DRUNK_DRIVERS'*, que indica el promedio de conductores bebidos por accidente en un día de la semana y franja horaria determinados.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+df3$PTE_DRUNK_DRIVERS <- round(df3$DRUNK_DRIVERS / df1$ACCIDENTS, 3)
+df3
+
+# Muestro mapa de calor
+ggplot(df3, aes(x =DISC_HOURNAME, y = DAY_WEEK, fill = PTE_DRUNK_DRIVERS)) +
+  geom_tile(color = "black") +
+  geom_text(aes(label = PTE_DRUNK_DRIVERS), color = "white", size =3) +
+  coord_fixed()
+```
+
+Se observa que la franja horaria número 4 no destaca por un alto número de conductores ebrios durante los viernes y sábados, por tanto, se descarta la hipótesis inicial.
+Así, afirmo que el aumento de conductores alcoholizados en la tarde/noche del viernes y del sábado se debe al aumento en el número de accidentes, y no al revés.
+
+Para confirmar que no existe correlación entre estas variables, contruimos la siguiente matriz de correlación.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# https://cran.r-project.org/web/packages/corrplot/vignettes/corrplot-intro.html
+if(!require("corrplot")) install.packages("corrplot"); library("corrplot")
+df3$ACCIDENTS <- df1$ACCIDENTS
+n = c("DISC_HOURNAME", "DAY_WEEK", "DRUNK_DRIVERS", "ACCIDENTS")
+factores= df3 %>% select(all_of(n))
+res<-cor(factores)
+corrplot(res,method="color",tl.col="black", tl.srt=30, order = "AOE",
+number.cex=0.75,sig.level = 0.01, addCoef.col = "black")
+```
+
+### Otros aspectos relevantes
+
+Por último se va a hacer un estudio para relacionar el número de fallecidos con el tiempo que ha tardado en llegar el paciente al hospital. Para ello, creo una nueva variable _'ELAPSED_MINS'_, calculada como la diferencia en minutos entre el momento de notificación del accidente y el momento de llegada al hospital, con un previo filtrado de datos que no nos sirven (horas desconocidas, o accidentes que no han requerido traslado a hospital).
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+n = c("NOT_HOUR","NOT_MIN","HOSP_HR","HOSP_MN","FATALS")
+accidentDataAux= accidentData %>% select(all_of(n))
+
+# Filtro horas inválidas
+accidentDataAux <- filter(accidentDataAux, NOT_HOUR < 24 & NOT_MIN < 60 & HOSP_HR < 24 & HOSP_MN < 60)
+
+# Calculo tiempo transcurrido en minutos
+accidentDataAux$ELAPSED_MINS = 
+  ((accidentDataAux$HOSP_HR-accidentDataAux$NOT_HOUR-(accidentDataAux$NOT_MIN>accidentDataAux$HOSP_MN))*60 + 
+     60*24*(accidentDataAux$NOT_HOUR>accidentDataAux$HOSP_HR)) + # hours diff
+  (accidentDataAux$HOSP_MN-accidentDataAux$NOT_MIN + 
+     60*(accidentDataAux$NOT_MIN>accidentDataAux$HOSP_MN))  # mins diff
+
+structure = str(accidentDataAux)
+```
+
+Una vez calculado el tiempo que se tarda en llegar al hospital, vamos a estudiar si hay alguna relación con el número de fallecidos y comprobar si un mayor tiempo de traslado al hospital supone una mayor probabilidad de muerte. Para ello, vamos a graficar cómo influye este tiempo en el número de fallecidos.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+ggp<- ggplot(data = accidentDataAux, aes(x = ELAPSED_MINS, y=FATALS)) +
+  geom_point(color = "gray30") + geom_smooth(method = lm,color = "firebrick") +
+  theme_bw() + xlab("ELAPSED_MINS") + ylab("FATALS")
+plot(ggp)
+```
+
+Como se puede apreciar, el número de fallecidos aumenta ligeramente a medida que aumenta el tiempo que se tarda en llegar al hospital, por lo que este puede ser un factor en la probabilidad de que una persona sobreviva o no a un accidente, aunque no parece ser el factor principal.
+
+Un factor clave en el número de fallecidos es el número de personas involucradas en el accidente. Para ver el impacto real del tiempo que se tarda en llegar al hospital, se va a relacionar con la proporción de fallecidos por involucrados en un accidente. Para ello, calculo el número total de personas involucradas en el accidente, y divido el número de fallecidos por el número total de personas involucradas.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+accidentDataAux2 = filter(accidentData, NOT_HOUR < 24 & NOT_MIN < 60 & HOSP_HR < 24 & HOSP_MN < 60)
+
+# Numero total de personas involucradas
+accidentDataAux$TOTAL_PERSONS <- accidentDataAux2$PEDS + accidentDataAux2$PERSONS + accidentDataAux2$PERMVIT + accidentDataAux2$PERNOTMVIT
+
+# Porcentaje de fallecidos
+accidentDataAux$PTE_FATALS <- round(accidentDataAux$FATALS / accidentDataAux$TOTAL_PERSONS,3)
+
+structure = str(accidentDataAux)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+ggp<- ggplot(data = accidentDataAux, aes(x = ELAPSED_MINS, y=PTE_FATALS)) +
+  geom_point(color = "gray30") + geom_smooth(method = lm,color = "firebrick") +
+  theme_bw() + xlab("ELAPSED_MINS") + ylab("PTE_FATALS")
+plot(ggp)
+```
+
+Finalmente, se aprecia que no existe prácticamente relación entre el tiempo que se tarda en llegar al hospital y la probabilidad de fallecer en un accidente.
